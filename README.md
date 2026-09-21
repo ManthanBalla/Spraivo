@@ -1,69 +1,92 @@
-# Spraivo
+# Spraivo 🚀
 
-An AI-powered English learning platform that replaces rigid placement tests and static worksheets with dynamic, goal-driven practice.
+An AI-powered English learning ecosystem that replaces rigid worksheets and repetitive tests with dynamic, adaptive, and goal-driven practice.
 
-Spraivo calibrates to your level on the fly using Google Gemini (`gemini-3.5-flash`), generates tailored lessons and quizzes for your specific focus areas, and caches content for lightning-fast repeat access.
+Spraivo calibrates to your level in real time using Google Gemini, generates tailored lessons, writing prompts, and quizzes for your specific focus areas, and caches content for lightning-fast repeat access.
 
 ---
 
-## What Makes Spraivo Different
+## 🌟 What Makes Spraivo Unique
 
-Most English learning apps force every learner through the exact same 20-question placement quiz and hardcoded grammar lists. Spraivo takes a different approach:
-
-- **Goal-First Onboarding**: Tell the app why you're learning (conversations, career, writing, or exams like IELTS/TOEFL) and what skills you want to prioritize. No 19-question roadblock upfront.
-- **Tailored Level Check**: Once inside, take a 2–3 minute diagnostic generated live by Gemini around your chosen focus areas to calibrate your starting CEFR level (A1 to C2).
-- **Live Content Generation**: Grammar explanations, real-world examples, common pitfalls, and quizzes are generated fresh for your level instead of pulled from static data files.
+- **Goal-First Onboarding**: State your motivation (daily conversations, career advancement, academic writing, or exams like IELTS/TOEFL) and target skills. Jump straight into learning without a 20-question roadblock.
+- **Tailored Level Check**: Take a 2–3 minute diagnostic generated live by Gemini around your chosen focus areas to calibrate your CEFR level (A1 to C2).
+- **Non-Repeating Vocabulary Engine**: Choose your daily word count (5, 10, 15, 20, or a custom amount) or randomize topics. Spraivo tracks mastered words so every session presents fresh, non-repeated vocabulary.
+- **Real-Notebook Writing Lab**: An authentic digital notebook with punch holes, red margin lines, and ruled line spacing that evaluates essays sentence-by-sentence with actionable feedback.
+- **Universal AI Dictionary**: Instant search for any English term with definitions, IPA pronunciations, example sentences, memory tips, and synonyms.
+- **Personal Starred Lexicon**: Bookmark challenging words from flashcards or search into a dedicated collection for quick review and listening practice.
+- **Learning Timeline & Report Cards**: Complete history of your writing submissions, vocabulary sprints, and grammar quizzes with an integrated report card viewer.
 - **24-Hour Database Caching**: Lessons and quizzes are cached in SQLite by `topic + level`. The first generation calls Gemini, and subsequent requests return in **4ms**, keeping the app snappy and API usage lean.
-- **Safe Goal Adjustments**: Change your focus areas or target exam anytime from the navigation bar — your practice history and scores stay completely intact.
 
 ---
 
-## Features
+## 🎨 Design & Aesthetic
 
-### 🤖 AI English Mentor
-A 1-on-1 conversational chat partner powered by Gemini. Ask why a grammar rule works, request natural phrasing alternatives, or practice everyday conversation without judgement.
-
-### ✍️ Writing Lab
-Submit responses to real-world or exam-style prompts. Receive instant, sentence-by-sentence feedback:
-- Overall, grammar, vocabulary, and coherence scores (0–100)
-- Specific corrections showing *what was written* vs *how to phrase it better*
-- Plain-English guidance on how to improve
-
-### 📖 Grammar Modules
-Pick any topic (Articles, Tenses, Modals, Conditionals, Passive Voice, etc.):
-1. Read a fresh, level-tailored lesson with clear rules, examples, and common traps.
-2. Click **Take the Test** to generate a 5–6 question quiz.
-3. Submit for instant answer breakdown, explanations, and automatic score updates.
-
-### 🗂️ Vocabulary Vault
-Study curated word sets with interactive 3D flashcards (definitions, pronunciations, context sentences, and synonyms), followed by live-generated quizzes.
-
-### 🎯 Practice Hub & Progress Tracking
-- Filter across Grammar, Vocabulary, and Reading comprehension passages.
-- View your learning streak, time spent practicing, and skill breakdown bars.
-- Receive smart recommendations targeting your weakest areas.
-
-### 🌓 Thoughtful Light & Dark Modes
-- **Dark Mode**: Cool slate and deep gray palette with clean elevation shadows (no neon glow or harsh outlines).
-- **Light Mode**: High-contrast, clean typography where all prompts and cards are crisp and readable.
-- **Buttons**: Cohesive cool blue/slate gradients across both themes.
+Built around a curated **Modern AI/EdTech** palette:
+- **Indigo & Cyan Accents**: `#4F46E5` / `#06B6D4` (Light) and `#6366F1` / `#22D3EE` (Dark).
+- **Light Mode**: Ultra-clean `#F8FAFC` background with pure white `#FFFFFF` cards, dark slate `#0F172A` text, and crisp borders.
+- **Dark Mode**: Deep `#0B1120` canvas with `#111827` elevated surfaces and clear contrast.
+- **Responsive Architecture**: Fully optimized across desktop, tablet, and mobile screens (down to 280px–300px narrow devices) with a slide-out mobile drawer and compact header stats.
 
 ---
 
-## Tech Stack
+## 🚀 Key Features
 
-- **Frontend**: React 19, Vite, Vanilla CSS (custom design system), Lucide React, Canvas Confetti
+### 🤖 Spraivo AI Mentor
+A 1-on-1 conversational partner powered by Gemini. Delivers structured, pedagogical responses with markdown tables, bullet points, and practical examples instead of dense paragraphs. Includes quick starter prompts and full context memory.
+
+### ✍️ Writing Lab (Ruled Notebook)
+An authentic digital lined notebook designed for immersion:
+- Visual binder punch holes, red vertical margin line, and ruled lines aligned to the text line-height.
+- Real-time word count, target length bar, and estimated reading time.
+- Instant AI evaluation with scores for **Overall**, **Grammar**, **Vocabulary**, and **Coherence** (0–100).
+- Detailed breakdown highlighting what was written versus suggested improvements, plus paragraph-by-paragraph coaching.
+
+### 🗂️ Dynamic Vocabulary System
+- **Daily Sessions**: Choose 5, 10, 15, 20, or any custom number of words.
+- **Non-Repeating Lexicon**: Automatically filters out previously seen words to ensure continuous learning.
+- **Interactive 3D Flashcards**: Flip cards to view pronunciations, meanings, contextual examples, memory tips, and synonyms, with built-in text-to-speech audio pronunciation.
+- **Active Sentence Practice**: Practice writing original sentences using the newly learned words and receive live AI grading on accuracy and natural usage.
+
+### 🔍 Spraivo AI Universal Word Search
+Instant live dictionary lookup for any English word or expression:
+- Returns phonetic spelling, part of speech, definition, contextual sentences, memory cues, and synonyms.
+- One-click star button to save any searched word directly into your personal lexicon.
+
+### ⭐ Starred Words (Personal Lexicon)
+- Bookmark words anytime from flashcard sessions or universal word search.
+- Filter, search, listen to pronunciations, and review memory cues in a dedicated review hub.
+
+### 📖 Comprehensive Grammar Hub
+Structured modules from foundational rules to advanced nuances:
+- Covers Tenses, Modals, Passive Voice, Conditionals, Relative Clauses, Reported Speech, Gerunds & Infinitives, Prepositions, Phrasal Verbs, and Subject-Verb Agreement.
+- Clear structural formulas, illustrative examples, common pitfalls, and live-generated practice tests with instant explanations.
+
+### 📜 Learning Timeline & History
+- Unified chronological log of all learning activities (Writing Lab essays, Vocabulary sprints, and Grammar tests).
+- Filter by activity type or search with the real-time glassmorphic search bar.
+- Interactive modal to review past essay report cards and feedback.
+
+### 🎯 Practice Hub & Progress Analytics
+- Skill breakdown bars across Grammar, Vocabulary, and Reading.
+- CEFR level progression, learning streaks, and diagnostic level check tools.
+- Quick goal adjustments from the navigation bar without losing saved practice history.
+
+---
+
+## 🛠️ Tech Stack
+
+- **Frontend**: React 19, Vite, Vanilla CSS (modular design tokens & responsive media queries), Lucide React, Canvas Confetti
 - **Backend**: Node.js, Express, SQLite (`better-sqlite3`)
-- **AI Integration**: Google Generative AI SDK (`gemini-3.5-flash`)
-- **Security**: JWT session cookies, bcrypt password hashing, `express-rate-limit`
+- **AI Integration**: Google Generative AI SDK (`gemini-2.5-flash` / `gemini-1.5-flash`)
+- **Security & Storage**: JWT session cookies, bcrypt password hashing, `express-rate-limit`
 
 ---
 
-## Getting Started
+## 🏁 Getting Started
 
 ### Prerequisites
 - Node.js (v18 or higher recommended)
-- A Google Gemini API key ([get one here](https://aistudio.google.com/))
+- Google Gemini API key ([Get an API key from Google AI Studio](https://aistudio.google.com/))
 
 ### 1. Clone & Install
 ```bash
@@ -73,27 +96,27 @@ npm install
 ```
 
 ### 2. Configure Environment
-Create a `.env` file inside the `server/` directory:
+Create a `.env` file in the `server/` directory:
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
 PORT=3001
 JWT_SECRET=your_jwt_secret_key_here
 ```
 
-*(Note: Never commit your `.env` file — it is already included in `.gitignore`)*
+*(Note: Never commit your `.env` file — it is pre-configured in `.gitignore`)*
 
-### 3. Run the App
+### 3. Run the Application
 To start both the backend server and Vite frontend concurrently:
 ```bash
 npm start
 ```
 
-Or run them individually in separate terminals:
+Or run them in separate terminals:
 ```bash
-# Terminal 1 (Backend - Port 3001)
+# Terminal 1: Backend Server (Port 3001)
 node server/server.js
 
-# Terminal 2 (Frontend - Port 5173)
+# Terminal 2: Vite Frontend (Port 5173)
 npm run dev
 ```
 
@@ -101,22 +124,45 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```text
 ├── public/                 # Static assets & favicons
 ├── server/
-│   ├── auth.js             # JWT verification & token generation
-│   ├── db.js               # SQLite database, schema, and 24h content cache
-│   ├── llmService.js       # Gemini prompts, schemas, and generation logic
-│   └── server.js           # Express API endpoints & rate limiters
+│   ├── auth.js             # JWT authentication & session handling
+│   ├── db.js               # SQLite schema, tables & 24-hour cache
+│   ├── llmService.js       # Gemini API prompts, schemas & evaluation
+│   └── server.js           # Express endpoints & rate limiters
 ├── src/
-│   ├── components/         # QuestionCard, Flashcard, Navbar, GoalModal
-│   ├── data/               # Topic definitions & prompts metadata
-│   ├── screens/            # Dashboard, Grammar, Vocab, WritingLab, Mentor, etc.
-│   ├── services/           # Client API sync & storage helpers
-│   ├── App.jsx             # Main router & theme state
-│   └── index.css           # Design tokens, themes & responsive styles
+│   ├── components/
+│   │   ├── Flashcard.jsx       # 3D interactive flashcard with TTS audio
+│   │   ├── GoalModal.jsx       # Learning goal adjustment dialog
+│   │   ├── Navbar.jsx          # Responsive desktop bar & mobile drawer
+│   │   └── QuestionCard.jsx    # Multiple-choice quiz component
+│   ├── data/
+│   │   ├── grammarData.js      # Comprehensive grammar definitions
+│   │   └── vocabularyData.js   # Lexicon topics & curated sets
+│   ├── screens/
+│   │   ├── AuthScreen.jsx           # Sign in & sign up screen
+│   │   ├── DashboardScreen.jsx      # Recommended lessons & level test
+│   │   ├── GrammarScreen.jsx        # Grammar lessons & interactive tests
+│   │   ├── HistoryScreen.jsx        # Learning timeline & report card modal
+│   │   ├── MentorScreen.jsx         # Spraivo AI structured chat partner
+│   │   ├── OnboardingScreen.jsx     # Goal-first diagnostic onboarding
+│   │   ├── PracticeCenterScreen.jsx # Categorized exercises & challenges
+│   │   ├── ProgressScreen.jsx       # Visual analytics & CEFR progress
+│   │   ├── StarredWordsScreen.jsx   # Personal bookmarked lexicon hub
+│   │   ├── VocabularyScreen.jsx     # Sessions, search, cards & practice
+│   │   └── WritingLabScreen.jsx     # Authentic lined notebook essay lab
+│   ├── services/
+│   │   └── storageService.js        # API client & local data persistence
+│   ├── App.jsx                      # App root, routing & theme manager
+│   └── index.css                    # Design tokens, themes & responsive breakpoints
 ├── package.json
 └── vite.config.js
 ```
+
+---
+
+## 📄 License
+This project is open-source and available under the standard MIT License.
