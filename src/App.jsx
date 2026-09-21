@@ -9,6 +9,8 @@ import PracticeCenterScreen from "./screens/PracticeCenterScreen";
 import ProgressScreen from "./screens/ProgressScreen";
 import MentorScreen from "./screens/MentorScreen";
 import WritingLabScreen from "./screens/WritingLabScreen";
+import StarredWordsScreen from "./screens/StarredWordsScreen";
+import HistoryScreen from "./screens/HistoryScreen";
 import {
   checkAuthSession,
   logoutUser,
@@ -39,9 +41,15 @@ export default function App() {
 
   useEffect(() => {
     if (theme === "light") {
+      document.documentElement.classList.add("light-theme");
       document.body.classList.add("light-theme");
+      document.documentElement.setAttribute("data-theme", "light");
+      document.body.setAttribute("data-theme", "light");
     } else {
+      document.documentElement.classList.remove("light-theme");
       document.body.classList.remove("light-theme");
+      document.documentElement.setAttribute("data-theme", "dark");
+      document.body.setAttribute("data-theme", "dark");
     }
     localStorage.setItem("linguapath_theme", theme);
   }, [theme]);
@@ -173,7 +181,7 @@ export default function App() {
           }}
         />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        <p style={{ fontSize: "0.95rem" }}>Loading LinguaPath...</p>
+        <p style={{ fontSize: "0.95rem" }}>Loading Spraivo...</p>
       </div>
     );
   }
@@ -247,6 +255,20 @@ export default function App() {
               />
             )}
 
+            {activeTab === "starred" && (
+              <StarredWordsScreen
+                userProfile={userProfile}
+                onNavigate={handleNavigate}
+              />
+            )}
+
+            {activeTab === "history" && (
+              <HistoryScreen
+                userProfile={userProfile}
+                onNavigate={handleNavigate}
+              />
+            )}
+
             {activeTab === "practice" && (
               <PracticeCenterScreen
                 userProfile={userProfile}
@@ -289,10 +311,10 @@ export default function App() {
           }}
         >
           <div>
-            LinguaPath • Personalized English Learning Platform
+            Spraivo • Personalized English Learning Platform
           </div>
           <div>
-            Grammar • Vocabulary • Reading • Writing • AI English Mentor
+            Grammar • Vocabulary • Reading • Writing • Spraivo AI
           </div>
         </div>
       </footer>

@@ -393,8 +393,8 @@ export default function DashboardScreen({
         <div
           className="card"
           style={{
-            background: "linear-gradient(135deg, rgba(30, 41, 59, 0.98) 0%, rgba(15, 23, 42, 0.98) 100%)",
-            border: "1px solid rgba(99, 102, 241, 0.35)",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border-subtle)",
             padding: "36px 30px",
             marginBottom: "32px",
             position: "relative",
@@ -410,13 +410,13 @@ export default function DashboardScreen({
               {exam_target && <span className="badge badge-warning">Target: {exam_target}</span>}
             </div>
 
-            <h1 style={{ fontSize: "2.3rem", color: "#ffffff", marginBottom: "12px", lineHeight: "1.2" }}>
+            <h1 style={{ fontSize: "2.3rem", color: "var(--text-primary)", marginBottom: "12px", lineHeight: "1.2" }}>
               Let's find out your English level
             </h1>
 
-            <p style={{ fontSize: "1.05rem", color: "#cbd5e1", lineHeight: "1.6", marginBottom: "22px" }}>
+            <p style={{ fontSize: "1.05rem", color: "var(--text-secondary)", lineHeight: "1.6", marginBottom: "22px" }}>
               We'll generate a personalized level check tailored to what you want to improve:{" "}
-              <strong style={{ color: "#ffffff" }}>{focus_areas.join(", ")}</strong>.
+              <strong style={{ color: "var(--text-primary)" }}>{focus_areas.join(", ")}</strong>.
               It takes just 2–3 minutes and accurately calibrates lessons and quizzes to your current skills.
             </p>
 
@@ -428,21 +428,21 @@ export default function DashboardScreen({
                 marginBottom: "28px"
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "#e2e8f0", fontSize: "0.9rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "var(--text-secondary)", fontSize: "0.9rem" }}>
                 <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "rgba(99, 102, 241, 0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <Target size={16} color="#818cf8" />
                 </div>
                 <span>Tailored to your stated goals</span>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "#e2e8f0", fontSize: "0.9rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "var(--text-secondary)", fontSize: "0.9rem" }}>
                 <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "rgba(16, 185, 129, 0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <Clock size={16} color="#10b981" />
                 </div>
                 <span>Quick check (6–8 questions)</span>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "#e2e8f0", fontSize: "0.9rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", color: "var(--text-secondary)", fontSize: "0.9rem" }}>
                 <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "rgba(56, 189, 248, 0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <Award size={16} color="#38bdf8" />
                 </div>
@@ -468,7 +468,7 @@ export default function DashboardScreen({
         {/* Explore Other Modules Card Grid */}
         <div style={{ marginBottom: "20px" }}>
           <h3 style={{ fontSize: "1.2rem", marginBottom: "8px", color: "var(--text-primary)" }}>
-            Or explore LinguaPath right away:
+            Or explore Spraivo right away:
           </h3>
           <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "18px" }}>
             You can jump straight into any module below at any time.
@@ -547,8 +547,8 @@ export default function DashboardScreen({
       <div
         className="card"
         style={{
-          background: "linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)",
-          border: "1px solid rgba(99, 102, 241, 0.25)",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border-subtle)",
           marginBottom: "28px",
           padding: "30px 24px",
           position: "relative",
@@ -562,9 +562,9 @@ export default function DashboardScreen({
               <span className="badge badge-gray">{learning_reason}</span>
               {exam_target && <span className="badge badge-warning">Target: {exam_target}</span>}
             </div>
-            <h1 style={{ fontSize: "2rem", color: "#ffffff" }}>Welcome back, {name}!</h1>
-            <p style={{ marginTop: "6px", maxWidth: "560px", fontSize: "0.95rem", color: "#cbd5e1" }}>
-              Your progress updates automatically as you learn. Chat with your AI Mentor or practice writing in the Writing Lab to build fluency faster.
+            <h1 style={{ fontSize: "2rem", color: "var(--text-primary)" }}>Welcome back, {name}!</h1>
+            <p style={{ marginTop: "6px", maxWidth: "560px", fontSize: "0.95rem", color: "var(--text-secondary)" }}>
+              Your progress updates automatically as you learn. Chat with Spraivo AI or practice writing in the Writing Lab to build fluency faster.
             </p>
           </div>
 
@@ -937,7 +937,7 @@ export default function DashboardScreen({
                 <Bot size={22} color="#818cf8" />
               </div>
               <div>
-                <h4 style={{ fontSize: "1.1rem" }}>AI English Mentor</h4>
+                <h4 style={{ fontSize: "1.1rem" }}>Spraivo AI</h4>
                 <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
                   {mentor_messages_count} messages exchanged
                 </div>
@@ -956,7 +956,7 @@ export default function DashboardScreen({
             onClick={() => onNavigate("mentor")}
             style={{ width: "100%", justifyContent: "space-between" }}
           >
-            <span>Chat with AI Mentor</span>
+            <span>Chat with Spraivo AI</span>
             <ArrowRight size={15} />
           </button>
         </div>

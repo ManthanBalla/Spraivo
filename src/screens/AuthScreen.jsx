@@ -91,7 +91,7 @@ export default function AuthScreen({ onAuthSuccess }) {
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 6px 20px rgba(99, 102, 241, 0.4)",
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
               marginBottom: "14px"
             }}
           >
@@ -102,7 +102,7 @@ export default function AuthScreen({ onAuthSuccess }) {
           </h1>
           <p style={{ fontSize: "0.95rem" }}>
             {isRegister
-              ? "Join LinguaPath to start your personalized English learning path."
+              ? "Join Spraivo to start your personalized English learning path."
               : "Sign in to resume your lessons and practice history."}
           </p>
         </div>

@@ -7,7 +7,7 @@ import rateLimit from "express-rate-limit";
 import bcrypt from "bcryptjs";
 import * as db from "./db.js";
 import * as llm from "./llmService.js";
-import { requireAuth, generateToken } from "./auth.js";
+import { requireAuth, optionalAuth, generateToken } from "./auth.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -460,6 +460,105 @@ app.post("/api/grade-quiz", requireAuth, (req, res) => {
 });
 
 // -------------------------------------------------------------
+// Interactive Vocabulary Sentence Evaluation & Universal Dictionary
+// -------------------------------------------------------------
+
+// POST /api/evaluate-vocab-sentence — Evaluates a sentence written by the user using a vocabulary word
+app.post("/api/evaluate-vocab-sentence", optionalAuth, async (req, res) => {
+  try {
+    const { word, definition, sentence } = req.body;
+    if (!word || !sentence || !sentence.trim()) {
+      return res.status(400).json({ error: "Word and sentence are required" });
+    }
+
+    const evaluation = await llm.evaluateVocabSentence({
+      word: word.trim(),
+      definition: (definition || "").trim(),
+      user_sentence: sentence.trim()
+    });
+
+    // Update profile progress if user is authenticated and sentence is valid
+    let profile = null;
+    if (req.user && req.user.user_id) {
+      profile = db.getProfile(req.user.user_id);
+      if (profile) {
+        profile.words_practiced = profile.words_practiced || {};
+        profile.words_practiced[word.toLowerCase()] = {
+          practiced_at: new Date().toISOString(),
+          score: evaluation.score,
+          sentence: sentence.trim()
+        };
+
+        profile.total_words_learned = Object.keys(profile.words_practiced).length;
+        profile.total_learning_minutes = (profile.total_learning_minutes || 0) + 2;
+        profile.total_questions_answered = (profile.total_questions_answered || 0) + 1;
+
+        // Increment vocabulary skill score slightly on successful sentence practice
+        if (evaluation.is_correct) {
+          profile.skill_scores = profile.skill_scores || {};
+          profile.skill_scores.vocabulary = Math.min(100, Math.max(50, (profile.skill_scores.vocabulary || 60) + 1));
+        }
+
+        db.saveProfile(req.user.user_id, profile);
+      }
+    }
+
+    res.json({
+      evaluation,
+      updatedProfile: profile
+    });
+  } catch (err) {
+    console.error("Error in /api/evaluate-vocab-sentence:", err);
+    res.status(500).json({ error: "Sentence evaluation failed", details: err.message });
+  }
+});
+
+// POST /api/lookup-word — Universal dictionary search for ANY English word with 24h caching
+app.post("/api/lookup-word", optionalAuth, async (req, res) => {
+  try {
+    const { word } = req.body;
+    if (!word || !word.trim()) {
+      return res.status(400).json({ error: "Word is required" });
+    }
+
+    const cleanWord = word.trim().toLowerCase();
+    const cacheKey = `dict:${cleanWord}`;
+
+    // 1. Check database cache
+    const cached = db.getCachedContent(cacheKey);
+    if (cached) {
+      return res.json({ wordData: cached, cached: true });
+    }
+
+    // 2. Fetch live definition from Gemini
+    const wordData = await llm.lookupDictionaryWord(cleanWord);
+    db.setCachedContent(cacheKey, "dictionary", cleanWord, "all", wordData);
+
+    res.json({ wordData, cached: false });
+  } catch (err) {
+    console.error("Error in /api/lookup-word:", err);
+    res.status(500).json({ error: "Word lookup failed", details: err.message });
+  }
+});
+
+// POST /api/generate-vocab-words — Generate endless new words on demand
+app.post("/api/generate-vocab-words", optionalAuth, async (req, res) => {
+  try {
+    const { category = "General", count = 8, existingWords = [] } = req.body;
+    const wordsData = await llm.generateVocabWords({
+      category: category.trim(),
+      count: Math.min(20, Math.max(3, parseInt(count) || 8)),
+      existingWords: Array.isArray(existingWords) ? existingWords : []
+    });
+
+    res.json({ words: wordsData.words || [] });
+  } catch (err) {
+    console.error("Error in /api/generate-vocab-words:", err);
+    res.status(500).json({ error: "Word generation failed", details: err.message });
+  }
+});
+
+// -------------------------------------------------------------
 // Standard User Data Endpoints (Profile, Attempts, Chat, Writing, Reset)
 // -------------------------------------------------------------
 
@@ -503,47 +602,49 @@ app.post("/api/attempts", requireAuth, (req, res) => {
   }
 });
 
-app.get("/api/chat-messages", requireAuth, (req, res) => {
+app.get("/api/chat-messages", optionalAuth, (req, res) => {
   try {
-    const messages = db.getChatMessages(req.user.user_id);
+    const userId = req.user?.user_id || "guest";
+    const messages = db.getChatMessages(userId);
     res.json({ messages });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch chat messages", details: err.message });
   }
 });
 
-app.post("/api/mentor-chat", requireAuth, aiLimiter, async (req, res) => {
+app.post("/api/mentor-chat", optionalAuth, aiLimiter, async (req, res) => {
   try {
     const { history = [], message } = req.body;
     if (!message || !message.trim()) {
       return res.status(400).json({ error: "Message cannot be empty" });
     }
 
+    const userId = req.user?.user_id || "guest";
     const trimmedMsg = message.trim();
     const userMsgId = "msg_u_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2, 6);
     const userMsg = {
       message_id: userMsgId,
-      user_id: req.user.user_id,
+      user_id: userId,
       role: "user",
       content: trimmedMsg,
       timestamp: new Date().toISOString()
     };
-    db.saveChatMessage(req.user.user_id, userMsg);
+    db.saveChatMessage(userId, userMsg);
 
     const aiReplyText = await llm.handleMentorChat(history, trimmedMsg);
 
     const assistantMsgId = "msg_a_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2, 6);
     const assistantMsg = {
       message_id: assistantMsgId,
-      user_id: req.user.user_id,
+      user_id: userId,
       role: "assistant",
       content: aiReplyText,
       timestamp: new Date().toISOString()
     };
-    db.saveChatMessage(req.user.user_id, assistantMsg);
+    db.saveChatMessage(userId, assistantMsg);
 
-    const profile = db.getProfile(req.user.user_id);
-    if (profile) {
+    const profile = req.user ? db.getProfile(req.user.user_id) : null;
+    if (profile && req.user) {
       profile.mentor_messages_count = (profile.mentor_messages_count || 0) + 1;
       db.saveProfile(req.user.user_id, profile);
     }
@@ -569,7 +670,7 @@ app.get("/api/writing-submissions", requireAuth, (req, res) => {
   }
 });
 
-app.post("/api/writing-feedback", requireAuth, aiLimiter, async (req, res) => {
+app.post("/api/writing-feedback", optionalAuth, aiLimiter, async (req, res) => {
   try {
     const { writing_type = "general", prompt_text = "", submitted_text = "" } = req.body;
     if (!submitted_text || !submitted_text.trim()) {
@@ -587,7 +688,7 @@ app.post("/api/writing-feedback", requireAuth, aiLimiter, async (req, res) => {
     const submission_id = "sub_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2, 6);
     const submission = {
       submission_id,
-      user_id: req.user.user_id,
+      user_id: req.user ? req.user.user_id : "guest",
       writing_type,
       prompt_text,
       submitted_text: trimmedText,
@@ -596,35 +697,38 @@ app.post("/api/writing-feedback", requireAuth, aiLimiter, async (req, res) => {
       timestamp: new Date().toISOString()
     };
 
-    db.saveWritingSubmission(req.user.user_id, submission);
+    let profile = null;
+    if (req.user && req.user.user_id) {
+      db.saveWritingSubmission(req.user.user_id, submission);
 
-    const profile = db.getProfile(req.user.user_id);
-    if (profile) {
-      const allSubs = db.getWritingSubmissions(req.user.user_id);
-      const lastFive = allSubs.slice(0, 5);
-      const avgWriting = Math.round(
-        lastFive.reduce((acc, curr) => acc + (curr.feedback.overall_score || 0), 0) / lastFive.length
-      );
+      profile = db.getProfile(req.user.user_id);
+      if (profile) {
+        const allSubs = db.getWritingSubmissions(req.user.user_id);
+        const lastFive = allSubs.slice(0, 5);
+        const avgWriting = Math.round(
+          lastFive.reduce((acc, curr) => acc + (curr.feedback.overall_score || 0), 0) / lastFive.length
+        );
 
-      profile.skill_scores = profile.skill_scores || {};
-      profile.skill_scores.writing = avgWriting;
-      profile.writing_submissions_count = (profile.writing_submissions_count || 0) + 1;
+        profile.skill_scores = profile.skill_scores || {};
+        profile.skill_scores.writing = avgWriting;
+        profile.writing_submissions_count = (profile.writing_submissions_count || 0) + 1;
 
-      const g = profile.skill_scores.grammar || 0;
-      const v = profile.skill_scores.vocabulary || 0;
-      const r = profile.skill_scores.reading || 0;
-      const w = profile.skill_scores.writing || 0;
-      profile.overall_score = Math.round((g + v + r + w) / 4);
+        const g = profile.skill_scores.grammar || 0;
+        const v = profile.skill_scores.vocabulary || 0;
+        const r = profile.skill_scores.reading || 0;
+        const w = profile.skill_scores.writing || 0;
+        profile.overall_score = Math.round((g + v + r + w) / 4);
 
-      if (profile.overall_score >= 90) profile.english_level = "C2";
-      else if (profile.overall_score >= 80) profile.english_level = "C1";
-      else if (profile.overall_score >= 65) profile.english_level = "B2";
-      else if (profile.overall_score >= 45) profile.english_level = "B1";
-      else if (profile.overall_score >= 25) profile.english_level = "A2";
-      else profile.english_level = "A1";
+        if (profile.overall_score >= 90) profile.english_level = "C2";
+        else if (profile.overall_score >= 80) profile.english_level = "C1";
+        else if (profile.overall_score >= 65) profile.english_level = "B2";
+        else if (profile.overall_score >= 45) profile.english_level = "B1";
+        else if (profile.overall_score >= 25) profile.english_level = "A2";
+        else profile.english_level = "A1";
 
-      profile.total_learning_minutes = (profile.total_learning_minutes || 0) + 10;
-      db.saveProfile(req.user.user_id, profile);
+        profile.total_learning_minutes = (profile.total_learning_minutes || 0) + 10;
+        db.saveProfile(req.user.user_id, profile);
+      }
     }
 
     res.json({
@@ -649,5 +753,5 @@ app.post("/api/reset", requireAuth, (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`LinguaPath Backend Server listening on http://localhost:${PORT}`);
+  console.log(`Spraivo Backend Server listening on http://localhost:${PORT}`);
 });

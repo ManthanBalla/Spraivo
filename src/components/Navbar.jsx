@@ -16,7 +16,9 @@ import {
   Moon,
   Menu,
   X,
-  LogOut
+  LogOut,
+  Star,
+  History
 } from "lucide-react";
 
 export default function Navbar({
@@ -40,10 +42,12 @@ export default function Navbar({
 
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: Compass },
-    { id: "mentor", label: "AI Mentor", icon: Bot, special: "indigo" },
+    { id: "mentor", label: "Spraivo AI", icon: Bot, special: "indigo" },
     { id: "writing", label: "Writing Lab", icon: PenTool, special: "magenta" },
     { id: "grammar", label: "Grammar", icon: BookOpen },
     { id: "vocabulary", label: "Vocabulary", icon: Layers },
+    { id: "starred", label: "Starred Words", icon: Star },
+    { id: "history", label: "History", icon: History },
     { id: "practice", label: "Practice Hub", icon: Target },
     { id: "progress", label: "Progress", icon: Award }
   ];
@@ -63,10 +67,10 @@ export default function Navbar({
           }}
         >
           <div className="brand-icon">
-            <Sparkles size={22} color="#ffffff" />
+            <Sparkles size={20} color="#ffffff" />
           </div>
           <span>
-            Lingua<span className="brand-text-accent">Path</span>
+            Sprai<span className="brand-text-accent">vo</span>
           </span>
         </a>
 
@@ -83,7 +87,7 @@ export default function Navbar({
                   className={`nav-link-btn ${isActive ? "active" : ""}`}
                   onClick={() => handleTabClick(item.id)}
                 >
-                  <Icon size={17} />
+                  <Icon size={15} />
                   <span>{item.label}</span>
                 </button>
               );
@@ -105,7 +109,7 @@ export default function Navbar({
           </button>
 
           {userProfile && (
-            <>
+            <div className="desktop-only-user-stat" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               {/* Streak Counter */}
               <div className="streak-pill" title={`${userProfile.streak_days || 1} Day Learning Streak`}>
                 <Flame size={16} fill="#f59e0b" color="#f59e0b" />
@@ -157,14 +161,9 @@ export default function Navbar({
                     </div>
 
                     <button
-                      id="change-goal-btn"
+                      id="change-goal-dropdown-btn"
                       className="btn btn-secondary btn-sm"
-                      style={{
-                        width: "100%",
-                        marginBottom: "6px",
-                        justifyContent: "flex-start",
-                        fontSize: "0.84rem"
-                      }}
+                      style={{ width: "100%", justifyContent: "flex-start", marginBottom: "6px" }}
                       onClick={() => {
                         setShowDropdown(false);
                         setShowGoalModal(true);
@@ -175,15 +174,8 @@ export default function Navbar({
                     </button>
 
                     <button
-                      id="reset-profile-btn"
                       className="btn btn-secondary btn-sm"
-                      style={{
-                        width: "100%",
-                        marginBottom: "6px",
-                        justifyContent: "flex-start",
-                        color: "var(--danger)",
-                        fontSize: "0.84rem"
-                      }}
+                      style={{ width: "100%", justifyContent: "flex-start", marginBottom: "6px", color: "var(--danger)" }}
                       onClick={() => {
                         setShowDropdown(false);
                         if (window.confirm("Reset your practice history and retake the initial level check?")) {
@@ -192,18 +184,12 @@ export default function Navbar({
                       }}
                     >
                       <RotateCcw size={14} />
-                      <span>Reset My Progress</span>
+                      <span>Reset Practice Data</span>
                     </button>
 
                     <button
-                      id="logout-btn"
                       className="btn btn-secondary btn-sm"
-                      style={{
-                        width: "100%",
-                        justifyContent: "flex-start",
-                        color: "var(--text-secondary)",
-                        fontSize: "0.84rem"
-                      }}
+                      style={{ width: "100%", justifyContent: "flex-start" }}
                       onClick={() => {
                         setShowDropdown(false);
                         onLogout();
@@ -215,10 +201,10 @@ export default function Navbar({
                   </div>
                 )}
               </div>
-            </>
+            </div>
           )}
 
-          {/* Mobile Hamburger Toggle Button */}
+          {/* Mobile Hamburger Toggle Button - Always visible on mobile */}
           {userProfile && (
             <button
               id="mobile-menu-btn"
@@ -235,6 +221,57 @@ export default function Navbar({
       {/* Mobile Drawer Navigation */}
       {userProfile && mobileMenuOpen && (
         <div className={`mobile-menu-drawer ${mobileMenuOpen ? "open" : ""}`}>
+          {/* Mobile User Profile & Stats Header */}
+          <div
+            style={{
+              padding: "12px 14px",
+              background: "var(--bg-subtle)",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--border-subtle)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "8px"
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div
+                style={{
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "50%",
+                  background: "var(--primary-gradient)",
+                  color: "#ffffff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 800,
+                  fontSize: "1rem"
+                }}
+              >
+                {(userProfile.name || "L").charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text-primary)" }}>
+                  {userProfile.name || "Learner"}
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", textTransform: "capitalize" }}>
+                  {userProfile.goal || "General"} English
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <div className="streak-pill" style={{ padding: "4px 8px", fontSize: "0.78rem" }}>
+                <Flame size={13} fill="#f59e0b" color="#f59e0b" />
+                <span>{userProfile.streak_days || 1}d</span>
+              </div>
+              <div className="cefr-badge" style={{ padding: "4px 8px", fontSize: "0.85rem" }}>
+                {userProfile.english_level || "A1"}
+              </div>
+            </div>
+          </div>
+
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;

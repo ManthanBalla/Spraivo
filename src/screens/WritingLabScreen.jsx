@@ -1,639 +1,827 @@
-import React, { useState, useEffect } from "react";
-import { WRITING_PROMPTS } from "../data/writingPromptsData";
+import React, { useState, useEffect, useRef } from "react";
+import confetti from "canvas-confetti";
 import {
   submitWriting,
-  getWritingSubmissions
+  getCompletedWritingTopics,
+  addCompletedWritingTopic
 } from "../services/storageService";
 import {
   PenTool,
+  Sparkles,
   CheckCircle2,
   AlertTriangle,
   RotateCcw,
-  Sparkles,
-  ArrowRight,
-  History,
-  BookOpen,
-  Info,
   Clock,
-  HelpCircle
+  BookOpen,
+  ArrowRight,
+  ArrowLeft,
+  ChevronRight,
+  RefreshCw,
+  Award,
+  Check,
+  Flame,
+  FileText,
+  AlignLeft,
+  Sliders,
+  History
 } from "lucide-react";
+
+// Curated pool of thought-provoking writing topics across various disciplines
+const INITIAL_TOPIC_POOL = [
+  {
+    id: "ai-society",
+    category: "Technology & Society",
+    topic: "How Artificial Intelligence is Changing the Way Humans Learn and Work",
+    starter_prompt: "Discuss whether AI tools enhance or hinder critical thinking, and describe your vision of the future workplace."
+  },
+  {
+    id: "digital-detox",
+    category: "Modern Life & Wellness",
+    topic: "The Value of Solitude and Stepping Away from Social Media",
+    starter_prompt: "Reflect on how constant connectivity affects our mental clarity and relationships with others."
+  },
+  {
+    id: "climate-stewardship",
+    category: "Environment & Future",
+    topic: "Individual Responsibility versus Corporate Action in Combating Climate Change",
+    starter_prompt: "Share your perspective on whether daily lifestyle changes matter more than legislative regulations."
+  },
+  {
+    id: "reading-books",
+    category: "Culture & Philosophy",
+    topic: "Why Reading Long-Form Literature Still Matters in the Age of Short Videos",
+    starter_prompt: "Explore how novels and detailed books build empathy, patience, and complex comprehension."
+  },
+  {
+    id: "failure-growth",
+    category: "Personal Growth",
+    topic: "A Valuable Lesson Learned from an Unplanned Setback or Mistake",
+    starter_prompt: "Describe a challenge you faced, how you adapted, and what it taught you about your resilience."
+  },
+  {
+    id: "urban-architecture",
+    category: "Society & Urban Life",
+    topic: "How City Architecture and Public Spaces Shape Human Happiness",
+    starter_prompt: "Discuss the importance of green parks, walkability, and communal spaces in urban living."
+  },
+  {
+    id: "remote-collaboration",
+    category: "Work & Economics",
+    topic: "The Long-Term Consequences of Remote Work on Team Culture",
+    starter_prompt: "Consider the balance between personal freedom and collaborative camaraderie in distributed companies."
+  },
+  {
+    id: "art-expression",
+    category: "Arts & Creativity",
+    topic: "Can Art and Music Bridge Political and Cultural Divides?",
+    starter_prompt: "Explain how creative expression allows people of different backgrounds to understand each other."
+  },
+  {
+    id: "curiosity-science",
+    category: "Science & Exploration",
+    topic: "Why Deep Scientific Curiosity is the Engine of Human Progress",
+    starter_prompt: "Discuss an invention, discovery, or scientific field that fascinates you most and why."
+  },
+  {
+    id: "daily-habits",
+    category: "Mindset & Daily Habits",
+    topic: "The Compound Power of Small Daily Habits Over Decades",
+    starter_prompt: "Analyze how small, consistent routines shape our health, intellect, and character over time."
+  }
+];
 
 export default function WritingLabScreen({
   userProfile,
   onUpdateProfile,
-  initialPromptId,
   onNavigate
 }) {
-  const [viewState, setViewState] = useState("prompts"); // 'prompts' | 'write' | 'feedback' | 'history'
-  const [selectedPrompt, setSelectedPrompt] = useState(null);
-  const [submittedText, setSubmittedText] = useState("");
-  const [filterType, setFilterType] = useState("all"); // 'all' | 'general' | 'academic'
+  // Screen views: "setup" (topic & goal choice) | "notebook" (writing workspace) | "report" (Spraivo AI report card)
+  const [viewState, setViewState] = useState("setup");
 
-  // Submission state
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [currentFeedback, setCurrentFeedback] = useState(null);
+  // Topic Mode: "custom" | "ai"
+  const [topicMode, setTopicMode] = useState("ai");
+  const [customTopicInput, setCustomTopicInput] = useState("");
+  const [currentAITopic, setCurrentAITopic] = useState(null);
 
-  // Past submissions archive
-  const [pastSubmissions, setPastSubmissions] = useState([]);
+  // Completed Topics (Non-repeating topics tracking)
+  const [completedTopics, setCompletedTopics] = useState([]);
+
+  // Word goal preference (Purely optional guideline, no restrictive rejection)
+  const [selectedWordGoal, setSelectedWordGoal] = useState("freeform"); // "freeform" | 100 | 250 | 500 | "custom"
+  const [customWordGoalNumber, setCustomWordGoalNumber] = useState(150);
+
+  // Active essay state
+  const [activeTopicTitle, setActiveTopicTitle] = useState("");
+  const [essayContent, setEssayContent] = useState("");
+
+  // Analysis & Submission state
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState("");
+  const [reportCard, setReportCard] = useState(null);
 
   useEffect(() => {
-    getWritingSubmissions().then((subs) => {
-      setPastSubmissions(subs);
-    });
+    const list = getCompletedWritingTopics();
+    setCompletedTopics(list);
+    pickFreshAITopic(list);
   }, []);
 
-  // Handle deep link / prompt selection from Dashboard recommendation
-  useEffect(() => {
-    if (initialPromptId) {
-      const p = WRITING_PROMPTS.find((item) => item.prompt_id === initialPromptId);
-      if (p) {
-        setSelectedPrompt(p);
-        setSubmittedText("");
-        setViewState("write");
-      }
+  // Pick a fresh AI topic that the user has never written on before
+  const pickFreshAITopic = (alreadyCompleted = completedTopics) => {
+    const completedSet = new Set(alreadyCompleted.map((t) => t.toLowerCase().trim()));
+    const uncompleted = INITIAL_TOPIC_POOL.filter(
+      (item) => !completedSet.has(item.topic.toLowerCase().trim())
+    );
+
+    if (uncompleted.length > 0) {
+      const random = uncompleted[Math.floor(Math.random() * uncompleted.length)];
+      setCurrentAITopic(random);
+    } else {
+      // If all 10 standard topics completed, generate unique dynamic topic
+      const dynamicTopic = {
+        id: "custom-ai-" + Date.now(),
+        category: "Spraivo AI Special Topic",
+        topic: "The Greatest Technological or Philosophical Question Facing Our Generation",
+        starter_prompt: "Explore an emerging dilemma that humanity must solve in the coming decades."
+      };
+      setCurrentAITopic(dynamicTopic);
     }
-  }, [initialPromptId]);
-
-  const filteredPrompts = WRITING_PROMPTS.filter((p) => {
-    if (filterType === "all") return true;
-    return p.writing_type === filterType;
-  });
-
-  const handleSelectPrompt = (prompt) => {
-    setSelectedPrompt(prompt);
-    setSubmittedText("");
-    setErrorMessage("");
-    setCurrentFeedback(null);
-    setViewState("write");
   };
 
-  const wordCount = submittedText.trim() ? submittedText.trim().split(/\s+/).filter(Boolean).length : 0;
+  const handleStartWriting = () => {
+    let finalTitle = "";
+    if (topicMode === "custom") {
+      finalTitle = customTopicInput.trim();
+      if (!finalTitle) {
+        alert("Please enter a topic title for your writing session.");
+        return;
+      }
+    } else {
+      finalTitle = currentAITopic?.topic || "My Reflections";
+    }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (wordCount < 10) {
-      setErrorMessage("Please write at least 10 words before submitting.");
+    setActiveTopicTitle(finalTitle);
+    setEssayContent("");
+    setAnalysisError("");
+    setReportCard(null);
+    setViewState("notebook");
+  };
+
+  const textareaRef = useRef(null);
+
+  const handleEssayChange = (e) => {
+    setEssayContent(e.target.value);
+    if (analysisError) setAnalysisError("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.max(520, textareaRef.current.scrollHeight)}px`;
+    }
+  };
+
+  const currentDateStr = new Date().toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric"
+  });
+
+  // Live word and character stats
+  const wordCount = essayContent.trim()
+    ? essayContent.trim().split(/\s+/).filter(Boolean).length
+    : 0;
+  const charCount = essayContent.length;
+  const readTimeMin = Math.max(1, Math.ceil(wordCount / 180));
+
+  // Word goal display label
+  const effectiveWordGoal =
+    selectedWordGoal === "freeform"
+      ? null
+      : selectedWordGoal === "custom"
+      ? customWordGoalNumber
+      : selectedWordGoal;
+
+  const handleSubmitForAnalysis = async () => {
+    if (wordCount < 15) {
+      setAnalysisError("Please compose at least 15 words so Spraivo AI can provide a meaningful structural analysis.");
       return;
     }
 
-    setIsSubmitting(true);
-    setErrorMessage("");
+    setIsAnalyzing(true);
+    setAnalysisError("");
 
     try {
-      const data = await submitWriting({
-        writing_type: selectedPrompt.writing_type,
-        prompt_text: selectedPrompt.prompt_text,
-        submitted_text: submittedText.trim()
+      const result = await submitWriting({
+        writing_type: "notebook_essay",
+        prompt_text: activeTopicTitle,
+        submitted_text: essayContent.trim()
       });
 
-      setCurrentFeedback(data.feedback);
-      if (data.updatedProfile) {
-        onUpdateProfile(data.updatedProfile);
+      setReportCard(result.feedback);
+      addCompletedWritingTopic(activeTopicTitle);
+      setCompletedTopics((prev) => [activeTopicTitle, ...prev]);
+
+      if (result.updatedProfile && onUpdateProfile) {
+        onUpdateProfile(result.updatedProfile);
       }
-      // Refresh past submissions
-      const updatedList = await getWritingSubmissions();
-      setPastSubmissions(updatedList);
-      setViewState("feedback");
+
+      if (result.feedback?.overall_score >= 75) {
+        try {
+          confetti({
+            particleCount: 80,
+            spread: 70,
+            origin: { y: 0.6 }
+          });
+        } catch (e) {}
+      }
+
+      setViewState("report");
     } catch (err) {
-      console.error("Submission error:", err);
-      setErrorMessage(err.message || "Failed to evaluate your writing. Please check your internet and retry.");
+      console.error("Analysis submission error:", err);
+      setAnalysisError(err.message || "Failed to analyze your writing. Please try again.");
     } finally {
-      setIsSubmitting(false);
+      setIsAnalyzing(false);
     }
   };
 
-  const handleRevise = () => {
-    setViewState("write");
-  };
-
   return (
-    <div className="app-container" style={{ maxWidth: "920px" }}>
-      {/* 1. PROMPT SELECTION CATALOG */}
-      {viewState === "prompts" && (
+    <div className="app-container" style={{ maxWidth: "960px", paddingBottom: "60px" }}>
+      {/* ========================================================================= */}
+      {/* 1. TOPIC SETUP & SELECTION VIEW                                           */}
+      {/* ========================================================================= */}
+      {viewState === "setup" && (
         <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "12px" }}>
-            <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                <span className="badge badge-primary">Writing Lab</span>
-                <span className="badge badge-gray">{WRITING_PROMPTS.length} Prompts Available</span>
-              </div>
-              <h1>Writing Practice Lab</h1>
-              <p style={{ marginTop: "4px" }}>
-                Practice everyday and academic writing with sentence-by-sentence feedback from your AI mentor.
-              </p>
+          {/* Header */}
+          <div style={{ marginBottom: "28px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+              <span className="badge badge-primary" style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                <PenTool size={13} />
+                <span>Spraivo Writing Lab</span>
+              </span>
+              <span className="badge badge-gray">Distraction-Free Notebook</span>
             </div>
-
-            <button
-              id="view-submissions-history-btn"
-              className="btn btn-secondary btn-sm"
-              onClick={() => setViewState("history")}
-            >
-              <History size={16} />
-              <span>Past Submissions ({pastSubmissions.length})</span>
-            </button>
-          </div>
-
-          {/* Filters */}
-          <div style={{ display: "flex", gap: "8px", marginBottom: "20px", flexWrap: "wrap" }}>
-            {[
-              { id: "all", label: "All Prompts" },
-              { id: "general", label: "Everyday English" },
-              { id: "academic", label: "Academic & Exam" }
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                id={`writing-filter-${tab.id}`}
-                className={`btn btn-sm ${filterType === tab.id ? "btn-primary" : "btn-secondary"}`}
-                onClick={() => setFilterType(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Prompts Grid */}
-          <div className="grid-2">
-            {filteredPrompts.map((p) => (
-              <div
-                key={p.prompt_id}
-                id={`prompt-card-${p.prompt_id}`}
-                className="card card-interactive"
-                onClick={() => handleSelectPrompt(p)}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                  padding: "24px"
-                }}
-              >
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                    <span className={`badge ${p.writing_type === "academic" ? "badge-primary" : "badge-warning"}`}>
-                      {p.writing_type === "academic" ? "Academic" : "General"}
-                    </span>
-                    <span style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "4px" }}>
-                      <Clock size={13} /> {p.suggested_words}
-                    </span>
-                  </div>
-
-                  <h3 style={{ fontSize: "1.2rem", marginBottom: "8px", color: "var(--text-primary)" }}>
-                    {p.title}
-                  </h3>
-
-                  <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: "1.5", marginBottom: "16px" }}>
-                    {p.prompt_text}
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingTop: "14px",
-                    borderTop: "1px solid var(--border-subtle)",
-                    fontSize: "0.88rem",
-                    fontWeight: 600,
-                    color: "var(--primary)"
-                  }}
-                >
-                  <span>Start Writing</span>
-                  <ArrowRight size={16} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 2. WRITING SUBMISSION FORM */}
-      {viewState === "write" && selectedPrompt && (
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-            <button
-              id="back-to-prompts-btn"
-              className="btn btn-secondary btn-sm"
-              onClick={() => setViewState("prompts")}
-            >
-              ← Choose Different Prompt
-            </button>
-            <span className="badge badge-primary">{selectedPrompt.writing_type.toUpperCase()}</span>
-          </div>
-
-          <div className="card" style={{ marginBottom: "20px", padding: "24px" }}>
-            <h2 style={{ fontSize: "1.45rem", marginBottom: "8px" }}>{selectedPrompt.title}</h2>
-            <p style={{ fontSize: "1.05rem", color: "var(--text-primary)", lineHeight: "1.6" }}>
-              {selectedPrompt.prompt_text}
+            <h1 style={{ fontSize: "2.3rem", fontWeight: 800, letterSpacing: "-0.02em" }}>
+              Expressive Writing Lab
+            </h1>
+            <p style={{ marginTop: "6px", color: "var(--text-secondary)", fontSize: "1rem" }}>
+              Choose your topic or let Spraivo AI suggest an unrepeated prompt. Write without rigid limits, and receive a comprehensive grammatical and semantic report card.
             </p>
-            <div style={{ marginTop: "12px", display: "flex", gap: "16px", fontSize: "0.86rem", color: "var(--text-muted)" }}>
-              <span>Suggested Length: <strong>{selectedPrompt.suggested_words}</strong></span>
-            </div>
           </div>
 
-          <form onSubmit={handleSubmit}>
-            <div className="card" style={{ padding: "24px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                <label style={{ fontWeight: 600, fontSize: "0.95rem" }}>
-                  Your Response:
-                </label>
-                <span
-                  style={{
-                    fontWeight: 700,
-                    fontSize: "0.9rem",
-                    color: wordCount >= 10 ? "var(--success)" : "var(--warning)"
-                  }}
-                >
-                  {wordCount} words
-                </span>
-              </div>
-
-              <textarea
-                id="writing-input-textarea"
-                className="fill-input"
-                rows={10}
-                placeholder="Write your piece here. Express your ideas freely — your AI mentor will help you refine grammar and vocabulary..."
-                value={submittedText}
-                onChange={(e) => setSubmittedText(e.target.value)}
-                disabled={isSubmitting}
-                style={{
-                  width: "100%",
-                  resize: "vertical",
-                  lineHeight: "1.7",
-                  fontSize: "1rem",
-                  fontFamily: "var(--font-body)",
-                  marginBottom: "16px"
-                }}
-              />
-
-              {/* Explicit Word Count Hint / Tooltip */}
-              {wordCount < 10 && (
-                <div
-                  style={{
-                    background: "var(--warning-bg)",
-                    border: "1px solid var(--warning-border)",
-                    borderRadius: "var(--radius-sm)",
-                    padding: "10px 14px",
-                    color: "var(--warning)",
-                    fontSize: "0.88rem",
-                    marginBottom: "16px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px"
-                  }}
-                >
-                  <Info size={16} style={{ flexShrink: 0 }} />
-                  <span>
-                    Write at least 10 words (aim for {selectedPrompt.suggested_words}) before submitting.
-                  </span>
-                </div>
-              )}
-
-              {errorMessage && (
-                <div
-                  style={{
-                    background: "var(--danger-bg)",
-                    border: "1px solid var(--danger-border)",
-                    borderRadius: "var(--radius-sm)",
-                    padding: "12px 16px",
-                    color: "var(--danger)",
-                    fontSize: "0.9rem",
-                    marginBottom: "16px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px"
-                  }}
-                >
-                  <AlertTriangle size={18} style={{ flexShrink: 0 }} />
-                  <span>{errorMessage}</span>
-                </div>
-              )}
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
-                <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
-                  You will get instant sentence-by-sentence corrections and advice.
-                </span>
-
-                <button
-                  id="submit-writing-btn"
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={wordCount < 10 || isSubmitting}
-                  title={wordCount < 10 ? "Write at least 10 words to submit" : "Submit your writing for feedback"}
-                  style={{ minWidth: "220px", height: "46px" }}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Sparkles size={16} />
-                      <span>Grading Your Writing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Submit for Feedback</span>
-                      <ArrowRight size={16} />
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* 3. STRUCTURED FEEDBACK VIEW */}
-      {viewState === "feedback" && currentFeedback && selectedPrompt && (
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
-            <button
-              id="revise-submission-btn"
-              className="btn btn-secondary btn-sm"
-              onClick={handleRevise}
+          {/* Topic Mode Selector Cards */}
+          <div className="grid-2" style={{ gap: "20px", marginBottom: "32px" }}>
+            {/* Card 1: Spraivo AI Suggestion */}
+            <div
+              className={`card card-interactive ${topicMode === "ai" ? "card-selected" : ""}`}
+              onClick={() => setTopicMode("ai")}
+              style={{
+                padding: "26px",
+                border: topicMode === "ai" ? "2px solid var(--primary)" : "1px solid var(--border-subtle)",
+                background: topicMode === "ai" ? "rgba(37, 99, 235, 0.08)" : "var(--bg-card)",
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between"
+              }}
             >
-              <RotateCcw size={15} />
-              <span>Revise & Polish</span>
-            </button>
-
-            <button
-              id="try-another-prompt-btn"
-              className="btn btn-primary btn-sm"
-              onClick={() => setViewState("prompts")}
-            >
-              <span>Try Another Prompt</span>
-              <ArrowRight size={15} />
-            </button>
-          </div>
-
-          {/* Scores Overview Card */}
-          <div className="card" style={{ padding: "28px", marginBottom: "24px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px", marginBottom: "20px" }}>
               <div>
-                <span className="badge badge-primary" style={{ marginBottom: "6px" }}>
-                  Feedback Ready
-                </span>
-                <h2>Writing Results</h2>
-                <p style={{ fontSize: "0.9rem" }}>
-                  Prompt: <strong>{selectedPrompt.title}</strong>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                  <span className="badge badge-primary">Spraivo AI Topic Generator</span>
+                  <span className="badge badge-gray">Non-Repeating</span>
+                </div>
+
+                <h3 style={{ fontSize: "1.25rem", color: "var(--text-primary)", marginBottom: "8px" }}>
+                  {currentAITopic ? currentAITopic.topic : "Generating inspiring prompt..."}
+                </h3>
+
+                {currentAITopic?.category && (
+                  <div style={{ fontSize: "0.8rem", color: "var(--primary)", fontWeight: 600, marginBottom: "8px" }}>
+                    Category: {currentAITopic.category}
+                  </div>
+                )}
+
+                <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: "1.5" }}>
+                  {currentAITopic?.starter_prompt}
                 </p>
               </div>
 
-              {/* Overall Score Badge */}
-              <div
-                style={{
-                  textAlign: "center",
-                  background: "var(--bg-subtle)",
-                  padding: "16px 24px",
-                  borderRadius: "var(--radius-md)",
-                  border: "1px solid var(--border-subtle)"
-                }}
-              >
-                <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>
-                  Overall Score
-                </div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-heading)",
-                    fontSize: "2.6rem",
-                    fontWeight: 800,
-                    color: currentFeedback.overall_score >= 75 ? "var(--success)" : currentFeedback.overall_score >= 55 ? "var(--warning)" : "var(--danger)"
+              <div style={{ marginTop: "18px", display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    pickFreshAITopic();
                   }}
+                  style={{ display: "flex", alignItems: "center", gap: "6px" }}
                 >
-                  {currentFeedback.overall_score}
-                  <span style={{ fontSize: "1.1rem", color: "var(--text-muted)", fontWeight: 400 }}>/100</span>
-                </div>
+                  <RefreshCw size={14} />
+                  <span>Suggest Another Topic</span>
+                </button>
               </div>
             </div>
 
-            {/* Plain English explanation of the score */}
+            {/* Card 2: Write on My Own Topic */}
             <div
+              className={`card card-interactive ${topicMode === "custom" ? "card-selected" : ""}`}
+              onClick={() => setTopicMode("custom")}
               style={{
-                background: "var(--bg-subtle)",
-                borderRadius: "var(--radius-sm)",
-                padding: "12px 16px",
-                marginBottom: "20px",
-                fontSize: "0.9rem",
-                color: "var(--text-secondary)",
-                borderLeft: "3px solid var(--primary)"
+                padding: "26px",
+                border: topicMode === "custom" ? "2px solid var(--primary)" : "1px solid var(--border-subtle)",
+                background: topicMode === "custom" ? "rgba(37, 99, 235, 0.08)" : "var(--bg-card)",
+                cursor: "pointer"
               }}
             >
-              💡 {currentFeedback.overall_score >= 75
-                ? "Well written! Your ideas are clear and engaging."
-                : currentFeedback.overall_score >= 55
-                ? "Good effort — review the sentence corrections below to sharpen your phrasing."
-                : "Nice try — take a look at the corrections below to learn how to fix these sentences."}
-            </div>
-
-            {/* 3 Component Score Progress Bars with Jargon-Free Labels */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.88rem", marginBottom: "6px" }}>
-                  <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>Grammar Accuracy</span>
-                  <span style={{ fontWeight: 700, color: "#818cf8" }}>{currentFeedback.grammar_score}%</span>
-                </div>
-                <div className="progress-bar-container">
-                  <div className="progress-bar-fill fill-grammar" style={{ width: `${currentFeedback.grammar_score}%` }} />
-                </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <span className="badge badge-gray">Custom Theme</span>
+                <span className="badge badge-gray">Your Own Subject</span>
               </div>
 
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.88rem", marginBottom: "6px" }}>
-                  <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>Vocabulary & Word Choice</span>
-                  <span style={{ fontWeight: 700, color: "#38bdf8" }}>{currentFeedback.vocabulary_score}%</span>
-                </div>
-                <div className="progress-bar-container">
-                  <div className="progress-bar-fill fill-vocab" style={{ width: `${currentFeedback.vocabulary_score}%` }} />
-                </div>
-              </div>
+              <h3 style={{ fontSize: "1.25rem", color: "var(--text-primary)", marginBottom: "8px" }}>
+                Write on My Own Topic
+              </h3>
 
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.88rem", marginBottom: "6px" }}>
-                  <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>How well your ideas connect</span>
-                  <span style={{ fontWeight: 700, color: "#34d399" }}>{currentFeedback.coherence_score}%</span>
-                </div>
-                <div className="progress-bar-container">
-                  <div className="progress-bar-fill fill-reading" style={{ width: `${currentFeedback.coherence_score}%` }} />
-                </div>
-              </div>
+              <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "16px", lineHeight: "1.5" }}>
+                Have an essay assignment, personal thought, or specific debate in mind? Type your topic title below.
+              </p>
+
+              <input
+                type="text"
+                className="input"
+                value={customTopicInput}
+                onChange={(e) => {
+                  setCustomTopicInput(e.target.value);
+                  setTopicMode("custom");
+                }}
+                placeholder="e.g., Why Learning a New Language Rewires the Brain..."
+                style={{
+                  width: "100%",
+                  color: "var(--text-primary)",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "var(--radius-sm)",
+                  fontSize: "0.92rem",
+                  padding: "10px 14px"
+                }}
+              />
             </div>
           </div>
 
-          {/* Sentence-Level Corrections Section */}
-          <div className="card" style={{ padding: "28px", marginBottom: "24px" }}>
-            <h3 style={{ marginBottom: "16px", color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "8px" }}>
-              <span>Sentence-by-Sentence Advice</span>
-              <span className="badge badge-gray">{currentFeedback.corrections.length} Tips</span>
-            </h3>
-
-            {currentFeedback.corrections.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                {currentFeedback.corrections.map((corr, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      background: "var(--bg-subtle)",
-                      border: "1px solid var(--border-subtle)",
-                      borderRadius: "var(--radius-md)",
-                      padding: "18px"
-                    }}
-                  >
-                    {/* What you wrote */}
-                    <div style={{ marginBottom: "10px" }}>
-                      <div style={{ fontSize: "0.76rem", color: "var(--danger)", textTransform: "uppercase", fontWeight: 700, marginBottom: "2px" }}>
-                        What you wrote
-                      </div>
-                      <div style={{ color: "var(--danger)", textDecoration: "line-through", fontSize: "0.95rem" }}>
-                        "{corr.original_sentence}"
-                      </div>
-                    </div>
-
-                    {/* Suggested Correction */}
-                    <div style={{ marginBottom: "12px" }}>
-                      <div style={{ fontSize: "0.76rem", color: "var(--success)", textTransform: "uppercase", fontWeight: 700, marginBottom: "2px" }}>
-                        Better way to say it
-                      </div>
-                      <div style={{ color: "var(--text-primary)", fontWeight: 600, fontSize: "1rem" }}>
-                        "{corr.corrected_sentence}"
-                      </div>
-                    </div>
-
-                    {/* Explanation */}
-                    <div
-                      style={{
-                        background: "rgba(99, 102, 241, 0.08)",
-                        padding: "10px 12px",
-                        borderRadius: "var(--radius-sm)",
-                        fontSize: "0.88rem",
-                        color: "var(--text-secondary)",
-                        lineHeight: "1.5"
-                      }}
-                    >
-                      <strong style={{ color: "var(--primary)" }}>Why this helps: </strong>
-                      {corr.explanation}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ textAlign: "center", padding: "24px", color: "var(--success)" }}>
-                <CheckCircle2 size={32} style={{ margin: "0 auto 8px" }} />
-                <p>Excellent grammar and word choice! No major sentence errors were found.</p>
-              </div>
-            )}
-          </div>
-
-          {/* Tutor Summary Note */}
+          {/* Word Goal Preference (Optional Guidelines, No Limit Blocking) */}
           <div
             className="card"
             style={{
               padding: "24px",
-              background: "rgba(99, 102, 241, 0.08)",
-              border: "1px solid rgba(99, 102, 241, 0.25)",
-              marginBottom: "32px"
+              marginBottom: "32px",
+              background: "var(--bg-subtle)",
+              border: "1px solid var(--border-subtle)"
             }}
           >
-            <h4 style={{ color: "var(--primary)", marginBottom: "8px", fontSize: "1.05rem" }}>
-              Tutor's Note
-            </h4>
-            <p style={{ color: "var(--text-primary)", lineHeight: "1.6", fontSize: "0.95rem" }}>
-              {currentFeedback.summary_feedback}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+              <Sliders size={16} color="var(--primary)" />
+              <h4 style={{ fontSize: "1rem", color: "var(--text-primary)", fontWeight: 700 }}>
+                Set a Target Word Count (Optional Guideline)
+              </h4>
+            </div>
+            <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: "16px" }}>
+              Choose a target goal for your practice. There are no strict cutoffs or rejections—write as much or as little as you desire!
             </p>
+
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+              {[
+                { id: "freeform", label: "No Limit (Freeform)" },
+                { id: 100, label: "100-150 Words (Quick)" },
+                { id: 250, label: "250-300 Words (Standard Essay)" },
+                { id: 500, label: "500+ Words (Deep Dive)" }
+              ].map((chip) => {
+                const isSelected = selectedWordGoal === chip.id;
+                return (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    onClick={() => setSelectedWordGoal(chip.id)}
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: "var(--radius-sm)",
+                      border: isSelected ? "2px solid var(--primary)" : "1px solid var(--border-subtle)",
+                      background: isSelected ? "rgba(99, 102, 241, 0.15)" : "var(--bg-card)",
+                      color: isSelected ? "var(--primary)" : "var(--text-primary)",
+                      fontWeight: 600,
+                      fontSize: "0.88rem",
+                      cursor: "pointer"
+                    }}
+                  >
+                    {chip.label}
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={() => setSelectedWordGoal("custom")}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "var(--radius-sm)",
+                  border: selectedWordGoal === "custom" ? "2px solid var(--primary)" : "1px solid var(--border-subtle)",
+                  background: selectedWordGoal === "custom" ? "rgba(99, 102, 241, 0.15)" : "var(--bg-card)",
+                  color: selectedWordGoal === "custom" ? "var(--primary)" : "var(--text-primary)",
+                  fontWeight: 600,
+                  fontSize: "0.88rem",
+                  cursor: "pointer"
+                }}
+              >
+                Custom Target
+              </button>
+
+              {selectedWordGoal === "custom" && (
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <input
+                    type="number"
+                    min={20}
+                    max={2000}
+                    value={customWordGoalNumber}
+                    onChange={(e) => setCustomWordGoalNumber(Math.max(10, parseInt(e.target.value) || 100))}
+                    style={{
+                      width: "80px",
+                      padding: "6px 10px",
+                      borderRadius: "6px",
+                      border: "1px solid var(--border-subtle)",
+                      background: "var(--bg-card)",
+                      color: "var(--text-primary)",
+                      fontSize: "0.9rem",
+                      fontWeight: 600,
+                      textAlign: "center"
+                    }}
+                  />
+                  <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>words</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Launch Button */}
+          <div style={{ textAlign: "center" }}>
+            <button
+              id="open-notebook-btn"
+              type="button"
+              className="btn btn-primary"
+              onClick={handleStartWriting}
+              style={{ padding: "14px 36px", fontSize: "1.05rem", fontWeight: 700 }}
+            >
+              <PenTool size={18} />
+              <span>Open Notebook & Start Writing</span>
+              <ChevronRight size={18} />
+            </button>
           </div>
         </div>
       )}
 
-      {/* 4. PAST SUBMISSIONS ARCHIVE */}
-      {viewState === "history" && (
+      {/* ========================================================================= */}
+      {/* 2. NOTEBOOK WRITING WORKSPACE VIEW                                        */}
+      {/* ========================================================================= */}
+      {viewState === "notebook" && (
         <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+          {/* Header Bar */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px", flexWrap: "wrap", gap: "10px" }}>
             <button
-              id="back-from-history-btn"
+              id="back-to-setup-btn"
               className="btn btn-secondary btn-sm"
-              onClick={() => setViewState("prompts")}
+              onClick={() => setViewState("setup")}
+              style={{ display: "flex", alignItems: "center", gap: "6px" }}
             >
-              ← Back to Prompts
+              <ArrowLeft size={16} />
+              <span>Change Topic</span>
             </button>
-            <h2>Your Writing Archive</h2>
-          </div>
 
-          {pastSubmissions.length === 0 ? (
-            <div className="card" style={{ textAlign: "center", padding: "40px" }}>
-              <PenTool size={36} color="#d946ef" style={{ margin: "0 auto 12px" }} />
-              <h3>No past submissions yet</h3>
-              <p style={{ marginTop: "6px" }}>Pick a prompt from the catalog to get your first writing evaluation!</p>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                Coaching by <strong style={{ color: "var(--primary)" }}>Spraivo AI</strong>
+              </span>
               <button
+                id="submit-notebook-top-btn"
                 className="btn btn-primary btn-sm"
-                onClick={() => setViewState("prompts")}
-                style={{ marginTop: "16px" }}
+                onClick={handleSubmitForAnalysis}
+                disabled={isAnalyzing || wordCount < 15}
               >
-                Browse Prompts
+                <span>{isAnalyzing ? "Analyzing..." : "Analyze & Get Report"}</span>
+                <ChevronRight size={15} />
               </button>
             </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-              {pastSubmissions.map((sub) => (
+          </div>
+
+          {/* Authentic Real Notebook Paper Interface */}
+          <div className="real-notebook-sheet">
+            {/* Spiral / Binder punch holes along the left margin */}
+            <div className="notebook-binder-strip" aria-hidden="true">
+              <div className="notebook-punch-hole" />
+              <div className="notebook-punch-hole" />
+              <div className="notebook-punch-hole" />
+            </div>
+
+            {/* Classic Red Vertical Margin Line */}
+            <div className="notebook-margin-line" aria-hidden="true" />
+
+            {/* Classic Printed Notebook Header Bar */}
+            <div className="notebook-sheet-header">
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                <div className="notebook-header-field">
+                  <span className="notebook-field-label">SUBJECT:</span>
+                  <span className="notebook-field-value">{activeTopicTitle}</span>
+                </div>
+              </div>
+
+              <div className="notebook-header-meta">
+                <div className="notebook-header-field">
+                  <span className="notebook-field-label">DATE:</span>
+                  <span className="notebook-field-value">{currentDateStr}</span>
+                </div>
+                <div className="notebook-header-field">
+                  <span className="notebook-field-label">PAGE:</span>
+                  <span className="notebook-field-value">01</span>
+                </div>
+
+                {/* Live Metric Badges */}
+                <div style={{ display: "flex", gap: "6px", alignItems: "center", marginLeft: "8px" }}>
+                  <span className="badge badge-gray" style={{ fontSize: "0.78rem", padding: "4px 10px" }}>
+                    {wordCount} {wordCount === 1 ? "word" : "words"}
+                    {effectiveWordGoal ? ` / ${effectiveWordGoal} goal` : ""}
+                  </span>
+                  <span className="badge badge-gray" style={{ fontSize: "0.78rem", padding: "4px 10px" }}>
+                    {charCount} chars
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Error banner if any */}
+            {analysisError && (
+              <div
+                style={{
+                  background: "rgba(239, 68, 68, 0.12)",
+                  borderBottom: "1px solid rgba(239, 68, 68, 0.3)",
+                  padding: "10px 24px 10px 84px",
+                  color: "#fca5a5",
+                  fontSize: "0.9rem",
+                  fontWeight: 600
+                }}
+              >
+                {analysisError}
+              </div>
+            )}
+
+            {/* Real Ruled Notebook Textarea */}
+            <textarea
+              ref={textareaRef}
+              id="notebook-essay-textarea"
+              className="real-notebook-textarea"
+              value={essayContent}
+              onChange={handleEssayChange}
+              placeholder="Begin writing here on the notebook lines... Your paragraphs will sit directly on each line. As you write, the notebook automatically expands with more lined paper..."
+              autoFocus
+            />
+          </div>
+
+          {/* Action Bar */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "24px", flexWrap: "wrap", gap: "12px" }}>
+            <div style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+              Tip: Aim to develop your arguments clearly with transition words and descriptive vocabulary.
+            </div>
+
+            <button
+              id="submit-notebook-btn"
+              type="button"
+              className="btn btn-primary"
+              onClick={handleSubmitForAnalysis}
+              disabled={isAnalyzing || wordCount < 15}
+              style={{ padding: "12px 28px", fontWeight: 700, display: "flex", alignItems: "center", gap: "8px" }}
+            >
+              {isAnalyzing ? (
+                <>
+                  <div
+                    style={{
+                      width: "16px",
+                      height: "16px",
+                      borderRadius: "50%",
+                      border: "2px solid rgba(255, 255, 255, 0.3)",
+                      borderTopColor: "#fff",
+                      animation: "spin 0.8s linear infinite"
+                    }}
+                  />
+                  <span>Spraivo AI is Generating Your Report Card...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={16} />
+                  <span>Analyze & Generate Report Card</span>
+                  <ChevronRight size={16} />
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 3. COMPREHENSIVE SPRAIVO AI REPORT CARD VIEW                              */}
+      {/* ========================================================================= */}
+      {viewState === "report" && reportCard && (
+        <div style={{ maxWidth: "900px", margin: "0 auto" }}>
+          {/* Back Action */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setViewState("notebook")}
+              style={{ display: "flex", alignItems: "center", gap: "6px" }}
+            >
+              <ArrowLeft size={16} />
+              <span>Revise in Notebook</span>
+            </button>
+
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => setViewState("setup")}
+              style={{ display: "flex", alignItems: "center", gap: "6px" }}
+            >
+              <PenTool size={15} />
+              <span>Write a New Topic</span>
+            </button>
+          </div>
+
+          {/* Main Report Card Container */}
+          <div className="card" style={{ padding: "36px", marginBottom: "28px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+              <Award size={20} color="var(--primary)" />
+              <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--primary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Spraivo AI Diagnostic Report Card
+              </span>
+            </div>
+
+            <h2 style={{ fontSize: "1.8rem", color: "var(--text-primary)", marginBottom: "4px" }}>
+              {activeTopicTitle}
+            </h2>
+            <div style={{ fontSize: "0.88rem", color: "var(--text-muted)", marginBottom: "24px" }}>
+              Evaluated {wordCount} words on {new Date().toLocaleDateString()}
+            </div>
+
+            {/* Overall Score Banner */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+                gap: "16px",
+                padding: "20px",
+                background: "var(--bg-subtle)",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--border-subtle)",
+                marginBottom: "28px"
+              }}
+            >
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>
+                  Overall Score
+                </div>
+                <div style={{ fontFamily: "var(--font-heading)", fontSize: "2.8rem", fontWeight: 800, color: "var(--primary)" }}>
+                  {reportCard.overall_score || 85}%
+                </div>
+              </div>
+
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>
+                  Grammar
+                </div>
+                <div style={{ fontFamily: "var(--font-heading)", fontSize: "2.4rem", fontWeight: 700, color: "#10b981" }}>
+                  {reportCard.grammar_score || 88}%
+                </div>
+              </div>
+
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>
+                  Vocabulary
+                </div>
+                <div style={{ fontFamily: "var(--font-heading)", fontSize: "2.4rem", fontWeight: 700, color: "#38bdf8" }}>
+                  {reportCard.vocabulary_score || 82}%
+                </div>
+              </div>
+
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "0.76rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>
+                  Coherence
+                </div>
+                <div style={{ fontFamily: "var(--font-heading)", fontSize: "2.4rem", fontWeight: 700, color: "#a855f7" }}>
+                  {reportCard.coherence_score || 86}%
+                </div>
+              </div>
+            </div>
+
+            {/* Summary Feedback */}
+            {reportCard.summary_feedback && (
+              <div
+                style={{
+                  background: "linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(6, 182, 212, 0.06))",
+                  borderLeft: "4px solid var(--primary)",
+                  padding: "16px 20px",
+                  borderRadius: "var(--radius-sm)",
+                  marginBottom: "28px"
+                }}
+              >
+                <div style={{ fontWeight: 700, color: "var(--text-primary)", fontSize: "0.95rem", marginBottom: "4px" }}>
+                  Spraivo AI Mentor Assessment:
+                </div>
+                <p style={{ color: "var(--text-secondary)", fontSize: "0.92rem", lineHeight: "1.5" }}>
+                  {reportCard.summary_feedback}
+                </p>
+              </div>
+            )}
+
+            {/* Sentence-by-Sentence Detailed Analysis */}
+            <div>
+              <h3 style={{ fontSize: "1.2rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px" }}>
+                Sentence-by-Sentence Polish & Improvements ({reportCard.corrections?.length || 0})
+              </h3>
+
+              {reportCard.corrections && reportCard.corrections.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  {reportCard.corrections.map((corr, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: "18px 20px",
+                        background: "var(--bg-subtle)",
+                        borderRadius: "var(--radius-md)",
+                        border: "1px solid var(--border-subtle)"
+                      }}
+                    >
+                      <div style={{ marginBottom: "8px" }}>
+                        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>
+                          Original Sentence
+                        </span>
+                        <div style={{ color: "#fca5a5", fontSize: "0.95rem", marginTop: "2px", fontStyle: "italic" }}>
+                          "{corr.original_sentence}"
+                        </div>
+                      </div>
+
+                      <div style={{ marginBottom: "10px" }}>
+                        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>
+                          Polished Variation
+                        </span>
+                        <div style={{ color: "#6ee7b7", fontSize: "0.95rem", marginTop: "2px", fontWeight: 600 }}>
+                          "{corr.corrected_sentence}"
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: "0.88rem", color: "var(--text-secondary)", lineHeight: "1.45" }}>
+                        <strong style={{ color: "var(--primary)" }}>Teaching Reason: </strong>
+                        {corr.explanation}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
                 <div
-                  key={sub.submission_id}
-                  className="card"
                   style={{
                     padding: "20px",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                    gap: "14px"
+                    background: "rgba(16, 185, 129, 0.08)",
+                    border: "1px solid rgba(16, 185, 129, 0.25)",
+                    borderRadius: "var(--radius-md)",
+                    color: "#6ee7b7",
+                    fontSize: "0.95rem",
+                    textAlign: "center"
                   }}
                 >
-                  <div style={{ flex: "1 1 260px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                      <span className={`badge ${sub.writing_type === "academic" ? "badge-primary" : "badge-warning"}`}>
-                        {sub.writing_type === "academic" ? "Academic" : "General"}
-                      </span>
-                      <strong style={{ color: "var(--text-primary)", fontSize: "1rem" }}>
-                        {sub.prompt_text.length > 55 ? sub.prompt_text.slice(0, 55) + "..." : sub.prompt_text}
-                      </strong>
-                    </div>
-
-                    <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                      <span>{new Date(sub.timestamp).toLocaleDateString()}</span>
-                      <span>•</span>
-                      <span>{sub.word_count} words</span>
-                      <span>•</span>
-                      <span>{sub.feedback?.corrections?.length || 0} corrections</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-                    <div
-                      style={{
-                        fontFamily: "var(--font-heading)",
-                        fontSize: "1.6rem",
-                        fontWeight: 800,
-                        color: sub.feedback?.overall_score >= 75 ? "var(--success)" : "var(--warning)"
-                      }}
-                    >
-                      {sub.feedback?.overall_score || 0}%
-                    </div>
-
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => {
-                        setSelectedPrompt({
-                          title: "Archived Submission",
-                          writing_type: sub.writing_type,
-                          prompt_text: sub.prompt_text,
-                          suggested_words: `${sub.word_count} words`
-                        });
-                        setCurrentFeedback(sub.feedback);
-                        setSubmittedText(sub.submitted_text);
-                        setViewState("feedback");
-                      }}
-                    >
-                      View Report
-                    </button>
-                  </div>
+                  🎉 Flawless work! Every sentence in your submission demonstrated clean grammar, proper syntax, and natural flow.
                 </div>
-              ))}
+              )}
             </div>
-          )}
+
+            {/* Bottom Actions */}
+            <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap", marginTop: "32px" }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setViewState("notebook")}
+                style={{ display: "flex", alignItems: "center", gap: "6px" }}
+              >
+                <RotateCcw size={16} />
+                <span>Revise Draft</span>
+              </button>
+
+              <button
+                className="btn btn-primary"
+                onClick={() => setViewState("setup")}
+                style={{ display: "flex", alignItems: "center", gap: "6px" }}
+              >
+                <PenTool size={16} />
+                <span>Write Next Topic</span>
+              </button>
+
+              {onNavigate && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => onNavigate("history")}
+                  style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                >
+                  <History size={16} />
+                  <span>View in History</span>
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

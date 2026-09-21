@@ -45,3 +45,31 @@ export function requireAuth(req, res, next) {
     return res.status(401).json({ error: "Session expired or invalid. Please sign in again." });
   }
 }
+
+/**
+ * Optional Authentication Middleware
+ * Decodes user if token is present, but allows guest access if absent
+ */
+export function optionalAuth(req, res, next) {
+  let token = null;
+
+  if (req.cookies && req.cookies.lp_token) {
+    token = req.cookies.lp_token;
+  } else if (req.headers.authorization) {
+    const parts = req.headers.authorization.split(" ");
+    if (parts.length === 2 && parts[0] === "Bearer") {
+      token = parts[1];
+    }
+  }
+
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      req.user = decoded;
+    } catch (e) {
+      // Ignore token failure for optional auth
+    }
+  }
+  next();
+}
+

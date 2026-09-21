@@ -12,6 +12,147 @@ import {
   Flame
 } from "lucide-react";
 
+function renderInlineSpans(text) {
+  if (!text) return null;
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={i} style={{ color: "var(--primary)", fontWeight: 700 }}>
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith("*") && part.endsWith("*")) {
+      return (
+        <em key={i} style={{ color: "var(--secondary)", fontStyle: "italic" }}>
+          {part.slice(1, -1)}
+        </em>
+      );
+    }
+    return part;
+  });
+}
+
+function renderFormattedAIContent(content) {
+  if (!content) return null;
+  const lines = content.split("\n");
+  const elements = [];
+  let currentList = [];
+
+  const flushList = () => {
+    if (currentList.length > 0) {
+      elements.push(
+        <ul key={`ul-${elements.length}`} style={{ margin: "8px 0 10px 18px", display: "flex", flexDirection: "column", gap: "6px" }}>
+          {currentList.map((item, i) => (
+            <li key={i} style={{ color: "var(--text-primary)", fontSize: "0.93rem" }}>
+              {renderInlineSpans(item)}
+            </li>
+          ))}
+        </ul>
+      );
+      currentList = [];
+    }
+  };
+
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushList();
+      return;
+    }
+
+    // Check for bullet items (•, -, *)
+    if (trimmed.startsWith("•") || trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+      currentList.push(trimmed.replace(/^[•\-\*]\s*/, ""));
+      return;
+    }
+    flushList();
+
+    // Check for Section Header (🎯, 💡, 📝, ⚠️, 🚀, ###, ##)
+    if (
+      trimmed.startsWith("🎯") ||
+      trimmed.startsWith("💡") ||
+      trimmed.startsWith("📝") ||
+      trimmed.startsWith("⚠️") ||
+      trimmed.startsWith("🚀") ||
+      trimmed.startsWith("###") ||
+      trimmed.startsWith("##")
+    ) {
+      const cleanHeader = trimmed.replace(/^###?\s*/, "");
+      elements.push(
+        <div
+          key={`header-${index}`}
+          style={{
+            fontWeight: 700,
+            fontSize: "0.98rem",
+            color: "var(--text-primary)",
+            marginTop: index > 0 ? "14px" : "2px",
+            marginBottom: "6px",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px"
+          }}
+        >
+          {renderInlineSpans(cleanHeader)}
+        </div>
+      );
+      return;
+    }
+
+    // Check for Good / Bad example lines
+    if (trimmed.startsWith("✅") || trimmed.includes("✅")) {
+      elements.push(
+        <div
+          key={`good-${index}`}
+          style={{
+            padding: "8px 12px",
+            borderRadius: "8px",
+            background: "rgba(16, 185, 129, 0.08)",
+            border: "1px solid rgba(16, 185, 129, 0.25)",
+            margin: "5px 0",
+            fontSize: "0.92rem",
+            color: "var(--text-primary)"
+          }}
+        >
+          {renderInlineSpans(trimmed)}
+        </div>
+      );
+      return;
+    }
+
+    if (trimmed.startsWith("❌") || trimmed.includes("❌")) {
+      elements.push(
+        <div
+          key={`bad-${index}`}
+          style={{
+            padding: "8px 12px",
+            borderRadius: "8px",
+            background: "rgba(239, 68, 68, 0.08)",
+            border: "1px solid rgba(239, 68, 68, 0.25)",
+            margin: "5px 0",
+            fontSize: "0.92rem",
+            color: "var(--text-primary)"
+          }}
+        >
+          {renderInlineSpans(trimmed)}
+        </div>
+      );
+      return;
+    }
+
+    // Regular paragraph
+    elements.push(
+      <p key={`p-${index}`} style={{ margin: "6px 0", color: "var(--text-primary)", fontSize: "0.94rem", lineHeight: "1.65" }}>
+        {renderInlineSpans(trimmed)}
+      </p>
+    );
+  });
+
+  flushList();
+  return elements;
+}
+
 export default function MentorScreen({ userProfile, onUpdateProfile }) {
   const [messages, setMessages] = useState([]);
   const [inputVal, setInputVal] = useState("");
@@ -65,7 +206,7 @@ export default function MentorScreen({ userProfile, onUpdateProfile }) {
       }
     } catch (err) {
       console.error("Mentor chat error:", err);
-      setErrorMessage(err.message || "Failed to reach AI Mentor. Please try again.");
+      setErrorMessage(err.message || "Failed to reach Spraivo AI. Please try again.");
       setLastFailedMessage(textToSend);
     } finally {
       setIsLoading(false);
@@ -78,13 +219,6 @@ export default function MentorScreen({ userProfile, onUpdateProfile }) {
       handleSendMessage(lastFailedMessage);
     }
   };
-
-  const suggestionChips = [
-    "Explain when to use present perfect",
-    "Correct this: She go to market yesterday",
-    "Useful phrases for IELTS Speaking",
-    "Let's practice a casual conversation"
-  ];
 
   return (
     <div className="app-container" style={{ maxWidth: "880px" }}>
@@ -111,7 +245,7 @@ export default function MentorScreen({ userProfile, onUpdateProfile }) {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 4px 14px rgba(99, 102, 241, 0.35)",
+              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.35)",
               flexShrink: 0
             }}
           >
@@ -120,7 +254,7 @@ export default function MentorScreen({ userProfile, onUpdateProfile }) {
 
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <h1 style={{ fontSize: "1.35rem" }}>AI English Mentor</h1>
+              <h1 style={{ fontSize: "1.35rem" }}>Spraivo AI</h1>
               <span className="badge badge-success">Online Tutor</span>
             </div>
             <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", marginTop: "2px" }}>
@@ -163,7 +297,7 @@ export default function MentorScreen({ userProfile, onUpdateProfile }) {
               Hello, {userProfile?.name || "there"}!
             </h3>
             <p style={{ fontSize: "0.9rem" }}>
-              I'm your personal English tutor. Ask me to explain a confusing grammar rule, check a sentence you wrote, or just practice conversation.
+              I'm Spraivo AI, your personal English tutor. Ask me to explain a confusing grammar rule, check a sentence you wrote, or just practice conversation.
             </p>
           </div>
         ) : (
@@ -206,14 +340,14 @@ export default function MentorScreen({ userProfile, onUpdateProfile }) {
                     color: isUser ? "#ffffff" : "var(--text-primary)",
                     border: isUser ? "none" : "1px solid var(--border-subtle)",
                     borderRadius: isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                    padding: "12px 18px",
+                    padding: "14px 18px",
                     lineHeight: "1.6",
                     fontSize: "0.95rem",
                     boxShadow: "var(--shadow-sm)",
                     wordBreak: "break-word"
                   }}
                 >
-                  {msg.content}
+                  {isUser ? msg.content : renderFormattedAIContent(msg.content)}
                 </div>
               </div>
             );
@@ -250,7 +384,7 @@ export default function MentorScreen({ userProfile, onUpdateProfile }) {
               }}
             >
               <Sparkles size={14} color="#06b6d4" />
-              <span>Mentor is thinking...</span>
+              <span>Spraivo AI is thinking...</span>
             </div>
           </div>
         )}
@@ -290,21 +424,6 @@ export default function MentorScreen({ userProfile, onUpdateProfile }) {
         </div>
       )}
 
-      {/* Quick-Start Chips (above input) */}
-      <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "8px", marginBottom: "8px" }}>
-        {suggestionChips.map((chip, idx) => (
-          <button
-            key={idx}
-            id={`mentor-chip-${idx}`}
-            className="btn btn-secondary btn-sm"
-            onClick={() => handleSendMessage(chip)}
-            disabled={isLoading}
-            style={{ whiteSpace: "nowrap", fontSize: "0.8rem", padding: "6px 12px" }}
-          >
-            <span>{chip}</span>
-          </button>
-        ))}
-      </div>
 
       {/* Input Form (Sticky for mobile screen keyboard usability) */}
       <div

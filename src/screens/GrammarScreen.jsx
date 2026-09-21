@@ -1,22 +1,24 @@
 import React, { useState, useEffect } from "react";
 import confetti from "canvas-confetti";
-import { GRAMMAR_TOPICS } from "../data/grammarData";
+import { GRAMMAR_TOPICS, GRAMMAR_CATEGORIES } from "../data/grammarData";
 import {
-  generateLesson,
   generateQuiz,
   gradeQuiz
 } from "../services/storageService";
 import QuestionCard from "../components/QuestionCard";
 import {
-  BookOpen,
   ArrowLeft,
-  ArrowRight,
   Sparkles,
   CheckCircle2,
   AlertTriangle,
   RotateCcw,
   ChevronRight,
-  RefreshCw
+  RefreshCw,
+  Search,
+  BookOpen,
+  Layers,
+  HelpCircle,
+  Award
 } from "lucide-react";
 
 export default function GrammarScreen({
@@ -27,12 +29,11 @@ export default function GrammarScreen({
 }) {
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [viewState, setViewState] = useState("list"); // "list" | "detail" | "practice" | "summary"
+  const [activeCategory, setActiveCategory] = useState("All Topics");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeLessonTab, setActiveLessonTab] = useState("all"); // "all" | "basic" | "intermediate" | "advanced" | "types" | "mistakes"
 
-  // Dynamic Lesson & Quiz states
-  const [lessonLoading, setLessonLoading] = useState(false);
-  const [lessonData, setLessonData] = useState(null);
-  const [lessonError, setLessonError] = useState("");
-
+  // Quiz states
   const [quizLoading, setQuizLoading] = useState(false);
   const [quizData, setQuizData] = useState(null);
   const [quizError, setQuizError] = useState("");
@@ -40,6 +41,16 @@ export default function GrammarScreen({
   const [attemptAnswers, setAttemptAnswers] = useState([]);
   const [isGrading, setIsGrading] = useState(false);
   const [lastAttemptSummary, setLastAttemptSummary] = useState(null);
+
+  const handleSelectTopic = (topic) => {
+    setSelectedTopic(topic);
+    setActiveLessonTab("all");
+    setViewState("detail");
+    setQuizData(null);
+    setAttemptAnswers([]);
+    setLastAttemptSummary(null);
+    setQuizError("");
+  };
 
   // If initialTopicId was passed (e.g. from Recommendation card click), open it directly
   useEffect(() => {
@@ -51,50 +62,48 @@ export default function GrammarScreen({
     }
   }, [initialTopicId]);
 
-  const handleSelectTopic = async (topic) => {
-    setSelectedTopic(topic);
-    setViewState("detail");
-    setLessonLoading(true);
-    setLessonError("");
-    setLessonData(null);
-    setQuizData(null);
-    setAttemptAnswers([]);
-    setLastAttemptSummary(null);
-
-    try {
-      const userLevel = userProfile?.english_level || "B1";
-      const lesson = await generateLesson(topic.title, userLevel, "grammar");
-      setLessonData(lesson);
-    } catch (err) {
-      console.error("Failed to load lesson:", err);
-      setLessonError(err.message || "Failed to load lesson. Please retry.");
-    } finally {
-      setLessonLoading(false);
-    }
-  };
-
-  const handleStartPractice = async () => {
+  const handleStartPractice = (useAI = false) => {
     if (!selectedTopic) return;
-    setQuizLoading(true);
-    setQuizError("");
-    setQuizData(null);
-    setQuestionIndex(0);
-    setAttemptAnswers([]);
-    setLastAttemptSummary(null);
-    setViewState("practice");
 
-    try {
+    if (useAI) {
+      // Generate live questions from Gemini
+      setQuizLoading(true);
+      setQuizError("");
+      setQuizData(null);
+      setQuestionIndex(0);
+      setAttemptAnswers([]);
+      setLastAttemptSummary(null);
+      setViewState("practice");
+
       const userLevel = userProfile?.english_level || "B1";
-      const quiz = await generateQuiz(selectedTopic.title, userLevel, "grammar");
-      if (!quiz || !quiz.questions || quiz.questions.length === 0) {
-        throw new Error("No quiz questions were returned. Please retry.");
-      }
-      setQuizData(quiz);
-    } catch (err) {
-      console.error("Failed to load quiz:", err);
-      setQuizError(err.message || "Failed to generate practice quiz. Please retry.");
-    } finally {
-      setQuizLoading(false);
+      generateQuiz(selectedTopic.title, userLevel, "grammar")
+        .then((quiz) => {
+          if (!quiz || !quiz.questions || quiz.questions.length === 0) {
+            throw new Error("No quiz questions were returned. Loading standard quiz.");
+          }
+          setQuizData(quiz);
+        })
+        .catch((err) => {
+          console.warn("AI Quiz generation failed, falling back to pre-authored questions:", err);
+          // Fallback to built-in high quality questions
+          setQuizData({
+            title: `${selectedTopic.title} Practice Quiz`,
+            questions: selectedTopic.questions || []
+          });
+        })
+        .finally(() => {
+          setQuizLoading(false);
+        });
+    } else {
+      // Instant load of high-quality verified questions
+      setQuizData({
+        title: `${selectedTopic.title} Comprehensive Practice`,
+        questions: selectedTopic.questions || []
+      });
+      setQuestionIndex(0);
+      setAttemptAnswers([]);
+      setLastAttemptSummary(null);
+      setViewState("practice");
     }
   };
 
@@ -141,7 +150,9 @@ export default function GrammarScreen({
             spread: 60,
             origin: { y: 0.6 }
           });
-        } catch (e) {}
+        } catch {
+          // ignore confetti animation error if canvas is not ready
+        }
       }
     } catch (err) {
       console.error("Failed to grade quiz:", err);
@@ -151,24 +162,96 @@ export default function GrammarScreen({
     }
   };
 
+  // Filter topics based on category tab & search query
+  const filteredTopics = GRAMMAR_TOPICS.filter((t) => {
+    const matchesCategory = activeCategory === "All Topics" || t.category === activeCategory;
+    const matchesSearch =
+      searchQuery.trim() === "" ||
+      t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (t.quick_summary && t.quick_summary.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesCategory && matchesSearch;
+  });
+
   return (
     <div className="app-container">
+      {/* ========================================================================= */}
       {/* 1. TOPICS LIST VIEW */}
+      {/* ========================================================================= */}
       {viewState === "list" && (
         <div>
-          <div style={{ marginBottom: "28px" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-              <span className="badge badge-primary">Grammar Curriculum</span>
-              <span className="badge badge-gray">Live-Generated Lessons</span>
+          {/* Header */}
+          <div style={{ marginBottom: "24px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px", flexWrap: "wrap" }}>
+              <span className="badge badge-primary">Comprehensive Curriculum</span>
+              <span className="badge badge-gray">Basic to Advanced</span>
+              <span className="badge badge-gray">{GRAMMAR_TOPICS.length} Complete Modules</span>
             </div>
-            <h1>Grammar Mastery Modules</h1>
-            <p style={{ marginTop: "6px", color: "var(--text-secondary)" }}>
-              Pick any topic below for a fresh, level-tailored lesson with real-world examples and interactive 5–6 question quizzes.
+            <h1>English Grammar Master Curriculum</h1>
+            <p style={{ marginTop: "6px", color: "var(--text-secondary)", fontSize: "1rem", maxWidth: "840px" }}>
+              Explore comprehensive explanations from basic foundations to advanced mastery across all 27 core grammatical topics. Every module explains definitions, full taxonomy types, structural rules, real-world examples, and common traps.
             </p>
           </div>
 
+          {/* Search Bar & Category Filters */}
+          <div style={{ marginBottom: "24px" }}>
+            <div
+              style={{
+                position: "relative",
+                marginBottom: "16px",
+                maxWidth: "600px"
+              }}
+            >
+              <Search
+                size={18}
+                style={{
+                  position: "absolute",
+                  left: "14px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  color: "var(--text-muted)"
+                }}
+              />
+              <input
+                type="text"
+                id="grammar-search-input"
+                placeholder="Search any grammar topic, rule, or concept (e.g., Verbs, Tenses, Modals)..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "12px 14px 12px 42px",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "var(--radius-md)",
+                  color: "var(--text-primary)",
+                  fontSize: "0.95rem"
+                }}
+              />
+            </div>
+
+            {/* Category Filter Pills */}
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              {GRAMMAR_CATEGORIES.map((cat) => (
+                <button
+                  key={cat}
+                  id={`grammar-cat-${cat.toLowerCase().replace(/[^a-z0-9]/g, "-")}`}
+                  className={`btn btn-sm ${activeCategory === cat ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setActiveCategory(cat)}
+                  style={{
+                    borderRadius: "20px",
+                    padding: "6px 14px",
+                    fontSize: "0.85rem"
+                  }}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Topic Cards Grid */}
           <div className="grid-2">
-            {GRAMMAR_TOPICS.map((topic, idx) => {
+            {filteredTopics.map((topic, idx) => {
               const score = userProfile?.grammar_topic_scores?.[topic.topic_id];
               const hasScore = score !== undefined && score !== null;
 
@@ -186,14 +269,21 @@ export default function GrammarScreen({
                   }}
                 >
                   <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                      <span className="badge badge-gray">{userProfile?.english_level || topic.level} Level</span>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "6px" }}>
+                      <span className="badge badge-gray" style={{ fontSize: "0.75rem" }}>
+                        {topic.category}
+                      </span>
+                      <span className="badge badge-primary" style={{ fontSize: "0.75rem" }}>
+                        Basic ➔ Advanced
+                      </span>
                       {hasScore ? (
-                        <span className={`badge ${score >= 75 ? "badge-success" : score >= 50 ? "badge-warning" : "badge-danger"}`}>
+                        <span className={`badge ${score >= 75 ? "badge-success" : score >= 50 ? "badge-warning" : "badge-danger"}`} style={{ fontSize: "0.75rem" }}>
                           Score: {score}%
                         </span>
                       ) : (
-                        <span className="badge badge-gray">Not started</span>
+                        <span className="badge badge-gray" style={{ fontSize: "0.75rem" }}>
+                          Not started
+                        </span>
                       )}
                     </div>
 
@@ -202,16 +292,16 @@ export default function GrammarScreen({
                     </h3>
 
                     <p style={{ fontSize: "0.88rem", lineHeight: "1.5", color: "var(--text-secondary)", marginBottom: "16px" }}>
-                      {topic.lesson_text ? topic.lesson_text.substring(0, 115) + "..." : `Master foundational rules and usage for ${topic.title}.`}
+                      {topic.quick_summary || (topic.lesson_text ? topic.lesson_text.substring(0, 115) + "..." : `Master foundational rules and usage for ${topic.title}.`)}
                     </p>
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "12px", borderTop: "1px solid var(--border-subtle)" }}>
                     <span style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
-                      5–6 Practice Questions
+                      {topic.taxonomy_types ? `${topic.taxonomy_types.length} Types Included` : "5–6 Practice Questions"}
                     </span>
                     <span style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--primary)", fontWeight: 600, fontSize: "0.9rem" }}>
-                      <span>Study & Practice</span>
+                      <span>Read Guide & Practice</span>
                       <ChevronRight size={16} />
                     </span>
                   </div>
@@ -219,12 +309,23 @@ export default function GrammarScreen({
               );
             })}
           </div>
+
+          {filteredTopics.length === 0 && (
+            <div className="card" style={{ textAlign: "center", padding: "48px 24px" }}>
+              <BookOpen size={40} style={{ color: "var(--text-muted)", margin: "0 auto 12px" }} />
+              <h3 style={{ marginBottom: "6px" }}>No grammar topics found</h3>
+              <p style={{ color: "var(--text-secondary)" }}>Try searching for a different keyword or selecting "All Topics".</p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* 2. TOPIC DETAIL VIEW (Live Generated Lesson) */}
+      {/* ========================================================================= */}
+      {/* 2. TOPIC DETAIL VIEW (Comprehensive Multi-Level Lesson) */}
+      {/* ========================================================================= */}
       {viewState === "detail" && selectedTopic && (
-        <div style={{ maxWidth: "840px", margin: "0 auto" }}>
+        <div style={{ maxWidth: "880px", margin: "0 auto" }}>
+          {/* Back Button */}
           <button
             id="back-to-grammar-list-btn"
             className="btn btn-secondary btn-sm"
@@ -232,67 +333,312 @@ export default function GrammarScreen({
             style={{ marginBottom: "20px" }}
           >
             <ArrowLeft size={16} />
-            <span>All Grammar Topics</span>
+            <span>All Grammar Topics ({GRAMMAR_TOPICS.length})</span>
           </button>
 
-          {lessonLoading ? (
-            <div className="card" style={{ padding: "48px 24px", textAlign: "center" }}>
+          <div className="card" style={{ padding: "32px" }}>
+            {/* Header Badges */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                <span className="badge badge-gray">{selectedTopic.category}</span>
+                <span className="badge badge-primary">Comprehensive Guide: Basic to Advanced</span>
+              </div>
+              {userProfile?.grammar_topic_scores?.[selectedTopic.topic_id] !== undefined ? (
+                <span className="badge badge-success">
+                  Your Best Score: {userProfile.grammar_topic_scores[selectedTopic.topic_id]}%
+                </span>
+              ) : (
+                <span className="badge badge-gray">Not yet practiced</span>
+              )}
+            </div>
+
+            {/* Title & Quick Summary */}
+            <h1 style={{ fontSize: "2.1rem", marginBottom: "10px", color: "var(--text-primary)" }}>
+              {selectedTopic.title}
+            </h1>
+            {selectedTopic.quick_summary && (
               <div
                 style={{
-                  width: "48px",
-                  height: "48px",
-                  borderRadius: "50%",
-                  border: "3px solid rgba(99, 102, 241, 0.2)",
-                  borderTopColor: "var(--primary)",
-                  margin: "0 auto 16px",
-                  animation: "spin 0.8s linear infinite"
+                  background: "var(--bg-subtle)",
+                  borderLeft: "3px solid var(--primary)",
+                  padding: "12px 18px",
+                  borderRadius: "var(--radius-sm)",
+                  marginBottom: "24px",
+                  color: "var(--text-primary)",
+                  fontSize: "0.95rem"
                 }}
-              />
-              <h2 style={{ fontSize: "1.4rem", marginBottom: "8px", color: "var(--text-primary)" }}>
-                Generating Lesson for {selectedTopic.title}...
-              </h2>
-              <p style={{ color: "var(--text-secondary)", fontSize: "0.92rem" }}>
-                Creating a plain-English explanation, real-world examples, and common traps tailored to {userProfile?.english_level || "B1"} level.
-              </p>
+              >
+                {selectedTopic.quick_summary}
+              </div>
+            )}
+
+            {/* Stage / Section Navigator Tabs */}
+            <div
+              style={{
+                display: "flex",
+                gap: "8px",
+                overflowX: "auto",
+                paddingBottom: "8px",
+                marginBottom: "28px",
+                borderBottom: "1px solid var(--border-subtle)"
+              }}
+            >
+              {[
+                { id: "all", label: "📚 Complete Guide" },
+                { id: "basic", label: "🟢 Basic (Foundations)" },
+                { id: "types", label: `🔍 Types (${selectedTopic.taxonomy_types?.length || 0})` },
+                { id: "intermediate", label: "🟡 Intermediate (Usage)" },
+                { id: "advanced", label: "🟣 Advanced (Mastery)" },
+                { id: "mistakes", label: "⚠️ Mistakes to Avoid" }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  id={`lesson-tab-${tab.id}`}
+                  className={`btn btn-sm ${activeLessonTab === tab.id ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setActiveLessonTab(tab.id)}
+                  style={{
+                    borderRadius: "18px",
+                    padding: "6px 14px",
+                    fontSize: "0.82rem",
+                    whiteSpace: "nowrap"
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
-          ) : lessonError ? (
-            <div className="card" style={{ padding: "36px", textAlign: "center" }}>
-              <div style={{ color: "#ef4444", marginBottom: "16px", fontSize: "1.05rem" }}>{lessonError}</div>
-              <button className="btn btn-primary" onClick={() => handleSelectTopic(selectedTopic)}>
-                <RefreshCw size={16} />
-                <span>Retry Generation</span>
-              </button>
-            </div>
-          ) : lessonData ? (
-            <div className="card" style={{ padding: "36px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
-                <span className="badge badge-primary">{userProfile?.english_level || "B1"} Level</span>
-                {userProfile?.grammar_topic_scores?.[selectedTopic.topic_id] !== undefined ? (
-                  <span className="badge badge-success">
-                    Current Score: {userProfile.grammar_topic_scores[selectedTopic.topic_id]}%
-                  </span>
-                ) : (
-                  <span className="badge badge-gray">Not yet practiced</span>
+
+            {/* ============================================================= */}
+            {/* STAGE 1: BASIC LEVEL (Foundations) */}
+            {/* ============================================================= */}
+            {(activeLessonTab === "all" || activeLessonTab === "basic") && selectedTopic.progressive_levels?.basic && (
+              <div style={{ marginBottom: "32px", padding: "20px", background: "var(--bg-subtle)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-subtle)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+                  <span style={{ fontSize: "1.2rem" }}>🟢</span>
+                  <h3 style={{ fontSize: "1.2rem", color: "var(--text-primary)" }}>
+                    {selectedTopic.progressive_levels.basic.heading || "Foundational Concept (Basic Level)"}
+                  </h3>
+                </div>
+                <p style={{ fontSize: "0.96rem", lineHeight: "1.7", color: "var(--text-primary)", marginBottom: "14px" }}>
+                  {selectedTopic.progressive_levels.basic.concept}
+                </p>
+
+                {selectedTopic.progressive_levels.basic.key_points && (
+                  <div style={{ marginBottom: "14px" }}>
+                    <h4 style={{ fontSize: "0.9rem", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "8px", fontWeight: 700 }}>
+                      Key Foundation Rules:
+                    </h4>
+                    <ul style={{ paddingLeft: "20px", color: "var(--text-secondary)", fontSize: "0.92rem", lineHeight: "1.6" }}>
+                      {selectedTopic.progressive_levels.basic.key_points.map((pt, idx) => (
+                        <li key={idx} style={{ marginBottom: "6px" }}>{pt}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {selectedTopic.progressive_levels.basic.examples && (
+                  <div>
+                    <h4 style={{ fontSize: "0.9rem", textTransform: "uppercase", color: "#38bdf8", marginBottom: "8px", fontWeight: 700 }}>
+                      Foundational Examples:
+                    </h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {selectedTopic.progressive_levels.basic.examples.map((ex, idx) => (
+                        <div key={idx} style={{ background: "var(--bg-card)", padding: "10px 14px", borderRadius: "var(--radius-sm)", fontSize: "0.9rem", color: "var(--text-primary)", borderLeft: "3px solid #38bdf8" }}>
+                          {ex}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
+            )}
 
-              <h1 style={{ marginBottom: "20px", color: "var(--text-primary)" }}>
-                {lessonData.title || selectedTopic.title}
-              </h1>
-
-              {/* Lesson Text */}
-              <div style={{ marginBottom: "28px" }}>
-                <h3 style={{ fontSize: "1.1rem", marginBottom: "8px", color: "var(--primary)" }}>Lesson Concept</h3>
-                <p style={{ fontSize: "1rem", lineHeight: "1.7", color: "var(--text-primary)" }}>
-                  {lessonData.explanation || selectedTopic.lesson_text}
+            {/* ============================================================= */}
+            {/* FULL TAXONOMY & TYPES DEEP DIVE */}
+            {/* ============================================================= */}
+            {(activeLessonTab === "all" || activeLessonTab === "types") && selectedTopic.taxonomy_types && selectedTopic.taxonomy_types.length > 0 && (
+              <div style={{ marginBottom: "32px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+                  <Layers size={20} color="var(--primary)" />
+                  <h3 style={{ fontSize: "1.25rem", color: "var(--text-primary)" }}>
+                    Complete Types & Categories of {selectedTopic.title}
+                  </h3>
+                </div>
+                <p style={{ color: "var(--text-secondary)", fontSize: "0.92rem", marginBottom: "16px" }}>
+                  A complete breakdown of every distinct classification, subtype, and usage pattern for this grammar topic:
                 </p>
-              </div>
 
-              {/* Example Sentences */}
-              <div style={{ marginBottom: "28px" }}>
-                <h3 style={{ fontSize: "1.1rem", marginBottom: "12px", color: "#38bdf8" }}>Example Sentences</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: "14px" }}>
+                  {selectedTopic.taxonomy_types.map((typeItem, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border-subtle)",
+                        borderRadius: "var(--radius-md)",
+                        padding: "16px",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between"
+                      }}
+                    >
+                      <div>
+                        <h4 style={{ fontSize: "1rem", color: "var(--primary)", marginBottom: "6px" }}>
+                          {typeItem.name}
+                        </h4>
+                        <p style={{ fontSize: "0.88rem", lineHeight: "1.5", color: "var(--text-secondary)", marginBottom: "12px" }}>
+                          {typeItem.description}
+                        </p>
+                      </div>
+
+                      {typeItem.examples && typeItem.examples.length > 0 && (
+                        <div style={{ background: "var(--bg-subtle)", padding: "8px 12px", borderRadius: "var(--radius-sm)", fontSize: "0.84rem" }}>
+                          <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>Examples: </span>
+                          <span style={{ color: "var(--text-primary)", fontStyle: "italic" }}>
+                            {typeItem.examples.join("; ")}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================= */}
+            {/* STAGE 2: INTERMEDIATE LEVEL */}
+            {/* ============================================================= */}
+            {(activeLessonTab === "all" || activeLessonTab === "intermediate") && selectedTopic.progressive_levels?.intermediate && (
+              <div style={{ marginBottom: "32px", padding: "20px", background: "var(--bg-subtle)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-subtle)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+                  <span style={{ fontSize: "1.2rem" }}>🟡</span>
+                  <h3 style={{ fontSize: "1.2rem", color: "var(--text-primary)" }}>
+                    {selectedTopic.progressive_levels.intermediate.heading || "Practical Usage & Rules (Intermediate Level)"}
+                  </h3>
+                </div>
+                <p style={{ fontSize: "0.96rem", lineHeight: "1.7", color: "var(--text-primary)", marginBottom: "14px" }}>
+                  {selectedTopic.progressive_levels.intermediate.concept}
+                </p>
+
+                {selectedTopic.progressive_levels.intermediate.rules_and_formulas && (
+                  <div style={{ marginBottom: "14px" }}>
+                    <h4 style={{ fontSize: "0.9rem", textTransform: "uppercase", color: "#f59e0b", marginBottom: "8px", fontWeight: 700 }}>
+                      Structural Rules & Formulas:
+                    </h4>
+                    <ul style={{ paddingLeft: "20px", color: "var(--text-secondary)", fontSize: "0.92rem", lineHeight: "1.6" }}>
+                      {selectedTopic.progressive_levels.intermediate.rules_and_formulas.map((rule, idx) => (
+                        <li key={idx} style={{ marginBottom: "6px" }}>{rule}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {selectedTopic.progressive_levels.intermediate.examples && (
+                  <div>
+                    <h4 style={{ fontSize: "0.9rem", textTransform: "uppercase", color: "#38bdf8", marginBottom: "8px", fontWeight: 700 }}>
+                      Real-World Usage Examples:
+                    </h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {selectedTopic.progressive_levels.intermediate.examples.map((ex, idx) => (
+                        <div key={idx} style={{ background: "var(--bg-card)", padding: "10px 14px", borderRadius: "var(--radius-sm)", fontSize: "0.9rem", color: "var(--text-primary)", borderLeft: "3px solid #f59e0b" }}>
+                          {ex}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ============================================================= */}
+            {/* STAGE 3: ADVANCED LEVEL */}
+            {/* ============================================================= */}
+            {(activeLessonTab === "all" || activeLessonTab === "advanced") && selectedTopic.progressive_levels?.advanced && (
+              <div style={{ marginBottom: "32px", padding: "20px", background: "var(--bg-subtle)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-subtle)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "10px" }}>
+                  <span style={{ fontSize: "1.2rem" }}>🟣</span>
+                  <h3 style={{ fontSize: "1.2rem", color: "var(--text-primary)" }}>
+                    {selectedTopic.progressive_levels.advanced.heading || "Mastery, Nuance & Edge Cases (Advanced Level)"}
+                  </h3>
+                </div>
+                <p style={{ fontSize: "0.96rem", lineHeight: "1.7", color: "var(--text-primary)", marginBottom: "14px" }}>
+                  {selectedTopic.progressive_levels.advanced.concept}
+                </p>
+
+                {selectedTopic.progressive_levels.advanced.nuances_and_exceptions && (
+                  <div style={{ marginBottom: "14px" }}>
+                    <h4 style={{ fontSize: "0.9rem", textTransform: "uppercase", color: "#c084fc", marginBottom: "8px", fontWeight: 700 }}>
+                      Subtle Distinctions & Exceptions:
+                    </h4>
+                    <ul style={{ paddingLeft: "20px", color: "var(--text-secondary)", fontSize: "0.92rem", lineHeight: "1.6" }}>
+                      {selectedTopic.progressive_levels.advanced.nuances_and_exceptions.map((nuance, idx) => (
+                        <li key={idx} style={{ marginBottom: "6px" }}>{nuance}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {selectedTopic.progressive_levels.advanced.examples && (
+                  <div>
+                    <h4 style={{ fontSize: "0.9rem", textTransform: "uppercase", color: "#38bdf8", marginBottom: "8px", fontWeight: 700 }}>
+                      Advanced Nuance Examples:
+                    </h4>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {selectedTopic.progressive_levels.advanced.examples.map((ex, idx) => (
+                        <div key={idx} style={{ background: "var(--bg-card)", padding: "10px 14px", borderRadius: "var(--radius-sm)", fontSize: "0.9rem", color: "var(--text-primary)", borderLeft: "3px solid #c084fc" }}>
+                          {ex}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ============================================================= */}
+            {/* RULES SUMMARY TABLE */}
+            {/* ============================================================= */}
+            {(activeLessonTab === "all" || activeLessonTab === "intermediate") && selectedTopic.rules_summary && selectedTopic.rules_summary.length > 0 && (
+              <div style={{ marginBottom: "32px" }}>
+                <h3 style={{ fontSize: "1.15rem", marginBottom: "14px", color: "var(--primary)" }}>
+                  Key Rule Reference Guide
+                </h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {(lessonData.examples && lessonData.examples.length ? lessonData.examples : selectedTopic.example_sentences || []).map((ex, idx) => (
+                  {selectedTopic.rules_summary.map((r, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        background: "var(--bg-subtle)",
+                        padding: "14px 18px",
+                        borderRadius: "var(--radius-md)",
+                        border: "1px solid var(--border-subtle)"
+                      }}
+                    >
+                      <div style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px" }}>
+                        {r.rule_name}
+                      </div>
+                      <div style={{ color: "var(--text-secondary)", fontSize: "0.9rem", marginBottom: "6px" }}>
+                        {r.explanation}
+                      </div>
+                      <div style={{ fontSize: "0.85rem", color: "#38bdf8" }}>
+                        <span style={{ fontWeight: 600 }}>Example: </span>{r.example}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ============================================================= */}
+            {/* GENERAL EXAMPLE SENTENCES */}
+            {/* ============================================================= */}
+            {activeLessonTab === "all" && selectedTopic.example_sentences && selectedTopic.example_sentences.length > 0 && (
+              <div style={{ marginBottom: "32px" }}>
+                <h3 style={{ fontSize: "1.15rem", marginBottom: "12px", color: "#38bdf8" }}>
+                  Real-World Sentences in Action
+                </h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {selectedTopic.example_sentences.map((ex, idx) => (
                     <div
                       key={idx}
                       style={{
@@ -309,24 +655,29 @@ export default function GrammarScreen({
                   ))}
                 </div>
               </div>
+            )}
 
-              {/* Common Mistakes */}
+            {/* ============================================================= */}
+            {/* COMMON MISTAKES TO AVOID */}
+            {/* ============================================================= */}
+            {(activeLessonTab === "all" || activeLessonTab === "mistakes") && selectedTopic.common_mistakes && selectedTopic.common_mistakes.length > 0 && (
               <div style={{ marginBottom: "32px" }}>
-                <h3 style={{ fontSize: "1.1rem", marginBottom: "12px", color: "#f59e0b", display: "flex", alignItems: "center", gap: "6px" }}>
+                <h3 style={{ fontSize: "1.15rem", marginBottom: "12px", color: "#f59e0b", display: "flex", alignItems: "center", gap: "8px" }}>
                   <AlertTriangle size={18} />
-                  <span>Common Mistakes to Avoid</span>
+                  <span>Common Mistakes & Traps to Avoid</span>
                 </h3>
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {(lessonData.common_mistakes && lessonData.common_mistakes.length ? lessonData.common_mistakes : selectedTopic.common_mistakes || []).map((mistake, idx) => (
+                  {selectedTopic.common_mistakes.map((mistake, idx) => (
                     <div
                       key={idx}
                       style={{
                         background: "rgba(245, 158, 11, 0.08)",
                         border: "1px solid rgba(245, 158, 11, 0.25)",
-                        padding: "12px 16px",
-                        borderRadius: "var(--radius-sm)",
+                        padding: "14px 18px",
+                        borderRadius: "var(--radius-md)",
                         fontSize: "0.92rem",
-                        color: "var(--text-primary)"
+                        color: "var(--text-primary)",
+                        lineHeight: "1.6"
                       }}
                     >
                       {mistake}
@@ -334,23 +685,54 @@ export default function GrammarScreen({
                   ))}
                 </div>
               </div>
+            )}
 
-              {/* Start Practice Button */}
-              <button
-                id="start-grammar-quiz-btn"
-                className="btn btn-primary btn-lg"
-                onClick={handleStartPractice}
-                style={{ width: "100%", justifyContent: "center" }}
-              >
-                <Sparkles size={18} />
-                <span>Take the Test (5–6 Questions)</span>
-              </button>
+            {/* ============================================================= */}
+            {/* PRACTICE QUIZ ACTION BUTTONS */}
+            {/* ============================================================= */}
+            <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: "24px", marginTop: "12px" }}>
+              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                <button
+                  id="start-grammar-quiz-btn"
+                  className="btn btn-primary btn-lg"
+                  onClick={() => handleStartPractice(false)}
+                  style={{ flex: "1 1 280px", justifyContent: "center" }}
+                >
+                  <Award size={18} />
+                  <span>Take Topic Test (5–6 Questions)</span>
+                </button>
+
+                <button
+                  id="start-ai-quiz-btn"
+                  className="btn btn-secondary btn-lg"
+                  onClick={() => handleStartPractice(true)}
+                  style={{ flex: "1 1 200px", justifyContent: "center" }}
+                >
+                  <Sparkles size={16} color="var(--primary)" />
+                  <span>Generate Extra AI Quiz</span>
+                </button>
+              </div>
+
+              {onNavigate && (
+                <div style={{ textAlign: "center", marginTop: "16px" }}>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => onNavigate("mentor")}
+                    style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}
+                  >
+                    <HelpCircle size={14} />
+                    <span>Have questions? Ask AI English Mentor about {selectedTopic.title}</span>
+                  </button>
+                </div>
+              )}
             </div>
-          ) : null}
+          </div>
         </div>
       )}
 
+      {/* ========================================================================= */}
       {/* 3. PRACTICE QUIZ VIEW */}
+      {/* ========================================================================= */}
       {viewState === "practice" && selectedTopic && (
         <div style={{ maxWidth: "800px", margin: "0 auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" }}>
@@ -373,7 +755,7 @@ export default function GrammarScreen({
                   width: "48px",
                   height: "48px",
                   borderRadius: "50%",
-                  border: "3px solid rgba(99, 102, 241, 0.2)",
+                  border: "3px solid rgba(59, 130, 246, 0.2)",
                   borderTopColor: "var(--primary)",
                   margin: "0 auto 16px",
                   animation: "spin 0.8s linear infinite"
@@ -383,15 +765,15 @@ export default function GrammarScreen({
                 Generating Quiz on {selectedTopic.title}...
               </h2>
               <p style={{ color: "var(--text-secondary)", fontSize: "0.92rem" }}>
-                Gemini is crafting 5–6 level-appropriate questions with detailed pedagogical explanations.
+                AI is crafting custom practice questions with detailed pedagogical explanations.
               </p>
             </div>
           ) : quizError ? (
             <div className="card" style={{ padding: "36px", textAlign: "center" }}>
               <div style={{ color: "#ef4444", marginBottom: "16px", fontSize: "1.05rem" }}>{quizError}</div>
-              <button className="btn btn-primary" onClick={handleStartPractice}>
+              <button className="btn btn-primary" onClick={() => handleStartPractice(false)}>
                 <RefreshCw size={16} />
-                <span>Retry Generating Quiz</span>
+                <span>Use Standard Practice Questions</span>
               </button>
             </div>
           ) : isGrading ? (
@@ -408,7 +790,7 @@ export default function GrammarScreen({
                 }}
               />
               <h2 style={{ fontSize: "1.4rem", marginBottom: "8px", color: "var(--text-primary)" }}>
-                Grading Quiz & Updating Scores...
+                Grading Quiz & Updating Progress...
               </h2>
             </div>
           ) : quizData?.questions?.length ? (
@@ -434,7 +816,9 @@ export default function GrammarScreen({
         </div>
       )}
 
+      {/* ========================================================================= */}
       {/* 4. SUMMARY VIEW */}
+      {/* ========================================================================= */}
       {viewState === "summary" && lastAttemptSummary && selectedTopic && (
         <div className="card" style={{ maxWidth: "720px", margin: "0 auto", padding: "36px", textAlign: "center" }}>
           <div
@@ -442,7 +826,7 @@ export default function GrammarScreen({
               width: "60px",
               height: "60px",
               borderRadius: "50%",
-              background: lastAttemptSummary.score >= 70 ? "rgba(16, 185, 129, 0.2)" : "rgba(245, 158, 11, 0.2)",
+              background: lastAttemptSummary.score >= 70 ? "rgba(16, 185, 129, 0.15)" : "rgba(245, 158, 11, 0.15)",
               border: `2px solid ${lastAttemptSummary.score >= 70 ? "#10b981" : "#f59e0b"}`,
               display: "inline-flex",
               alignItems: "center",
@@ -529,7 +913,7 @@ export default function GrammarScreen({
             <button
               id="retake-grammar-quiz-btn"
               className="btn btn-secondary"
-              onClick={handleStartPractice}
+              onClick={() => handleStartPractice(false)}
             >
               <RotateCcw size={16} />
               <span>Practice Again</span>
@@ -542,13 +926,15 @@ export default function GrammarScreen({
               <span>Back to Topics</span>
               <ChevronRight size={16} />
             </button>
-            <button
-              id="go-dash-after-grammar-btn"
-              className="btn btn-secondary"
-              onClick={() => onNavigate("dashboard")}
-            >
-              <span>Dashboard</span>
-            </button>
+            {onNavigate && (
+              <button
+                id="go-dash-after-grammar-btn"
+                className="btn btn-secondary"
+                onClick={() => onNavigate("dashboard")}
+              >
+                <span>Dashboard</span>
+              </button>
+            )}
           </div>
         </div>
       )}

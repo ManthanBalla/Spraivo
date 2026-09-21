@@ -77,7 +77,7 @@ export default function OnboardingScreen({ currentUser, onComplete }) {
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: "0 6px 18px rgba(37, 99, 235, 0.3)",
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
               marginBottom: "16px"
             }}
           >

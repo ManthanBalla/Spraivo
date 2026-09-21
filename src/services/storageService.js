@@ -5,6 +5,9 @@ const LOCAL_PROFILE_KEY = "linguapath_active_profile";
 const LOCAL_ATTEMPTS_KEY = "linguapath_active_attempts";
 const LOCAL_MESSAGES_KEY = "linguapath_active_chat";
 const LOCAL_WRITING_KEY = "linguapath_active_writing";
+const LOCAL_STARRED_KEY = "spraivo_starred_words";
+const LOCAL_COMPLETED_TOPICS_KEY = "spraivo_completed_writing_topics";
+const LOCAL_VOCAB_HISTORY_KEY = "spraivo_vocab_history";
 
 export function calculateEnglishLevel(overallScore) {
   if (overallScore >= 90) return "C2";
@@ -493,7 +496,84 @@ export async function submitWriting({ writing_type, prompt_text, submitted_text 
   if (data.updatedProfile) {
     saveUserProfile(data.updatedProfile);
   }
+
+  // Record completed topic so it is never repeated
+  addCompletedWritingTopic(prompt_text);
+
+  // Persist locally for instant offline/history access
+  try {
+    const localList = JSON.parse(localStorage.getItem(LOCAL_WRITING_KEY) || "[]");
+    const newEntry = data.submission || {
+      submission_id: "sub_local_" + Date.now().toString(36),
+      writing_type,
+      prompt_text,
+      submitted_text,
+      word_count: submitted_text.split(/\s+/).filter(Boolean).length,
+      feedback: data.feedback,
+      timestamp: new Date().toISOString()
+    };
+    localStorage.setItem(LOCAL_WRITING_KEY, JSON.stringify([newEntry, ...localList]));
+  } catch (e) {}
+
   return data;
+}
+
+// -------------------------------------------------------------
+// Vocabulary Interactive Learning & Universal Dictionary
+// -------------------------------------------------------------
+
+export async function evaluateVocabSentence(word, definition, sentence) {
+  const res = await fetch("/api/evaluate-vocab-sentence", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ word, definition, sentence })
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to evaluate sentence.");
+  }
+
+  const data = await res.json();
+  if (data.updatedProfile) {
+    saveUserProfile(data.updatedProfile);
+  }
+  return data;
+}
+
+export async function lookupDictionaryWord(word) {
+  const res = await fetch("/api/lookup-word", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ word })
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "Word lookup failed.");
+  }
+
+  const data = await res.json();
+  return data.wordData;
+}
+
+export async function generateVocabWords(category, count = 8, existingWords = []) {
+  const res = await fetch("/api/generate-vocab-words", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ category, count, existingWords })
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || "Failed to generate new words.");
+  }
+
+  const data = await res.json();
+  return data.words || [];
 }
 
 // -------------------------------------------------------------
@@ -509,3 +589,119 @@ export async function resetUserProfile() {
     });
   } catch (e) {}
 }
+
+// -------------------------------------------------------------
+// Starred Words (Vocabulary Bookmarking)
+// -------------------------------------------------------------
+
+export function getStarredWords() {
+  try {
+    const raw = localStorage.getItem(LOCAL_STARRED_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function saveStarredWords(wordsList) {
+  try {
+    localStorage.setItem(LOCAL_STARRED_KEY, JSON.stringify(wordsList || []));
+  } catch (e) {
+    console.warn("Failed to persist starred words:", e.message);
+  }
+}
+
+export function toggleStarredWord(wordObj) {
+  if (!wordObj || !wordObj.word) return false;
+  const current = getStarredWords();
+  const cleanTarget = wordObj.word.trim().toLowerCase();
+  const existsIndex = current.findIndex((w) => w.word.trim().toLowerCase() === cleanTarget);
+
+  let updated;
+  let isNowStarred = false;
+  if (existsIndex >= 0) {
+    // Unstar
+    updated = current.filter((_, idx) => idx !== existsIndex);
+    isNowStarred = false;
+  } else {
+    // Star
+    updated = [
+      {
+        word: wordObj.word,
+        pronunciation: wordObj.pronunciation || "",
+        part_of_speech: wordObj.part_of_speech || "word",
+        meaning: wordObj.meaning || "",
+        example_sentence: wordObj.example_sentence || "",
+        memory_tip: wordObj.memory_tip || "",
+        synonyms: wordObj.synonyms || [],
+        starred_at: new Date().toISOString()
+      },
+      ...current
+    ];
+    isNowStarred = true;
+  }
+
+  saveStarredWords(updated);
+  return isNowStarred;
+}
+
+export function isWordStarred(wordText) {
+  if (!wordText) return false;
+  const current = getStarredWords();
+  const cleanTarget = wordText.trim().toLowerCase();
+  return current.some((w) => w.word.trim().toLowerCase() === cleanTarget);
+}
+
+// -------------------------------------------------------------
+// Non-Repeating Writing Topics & History
+// -------------------------------------------------------------
+
+export function getCompletedWritingTopics() {
+  try {
+    const raw = localStorage.getItem(LOCAL_COMPLETED_TOPICS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function addCompletedWritingTopic(topicTitle) {
+  if (!topicTitle || !topicTitle.trim()) return;
+  const current = getCompletedWritingTopics();
+  const clean = topicTitle.trim().toLowerCase();
+  if (!current.map((t) => t.toLowerCase()).includes(clean)) {
+    const updated = [topicTitle.trim(), ...current];
+    try {
+      localStorage.setItem(LOCAL_COMPLETED_TOPICS_KEY, JSON.stringify(updated));
+    } catch (e) {}
+  }
+}
+
+// -------------------------------------------------------------
+// Vocabulary Session History
+// -------------------------------------------------------------
+
+export function getVocabSessionHistory() {
+  try {
+    const raw = localStorage.getItem(LOCAL_VOCAB_HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function saveVocabSessionHistory(sessionData) {
+  if (!sessionData) return;
+  const current = getVocabSessionHistory();
+  const entry = {
+    id: "vsess_" + Date.now().toString(36),
+    timestamp: new Date().toISOString(),
+    ...sessionData
+  };
+  const updated = [entry, ...current].slice(0, 50); // Keep latest 50
+  try {
+    localStorage.setItem(LOCAL_VOCAB_HISTORY_KEY, JSON.stringify(updated));
+  } catch (e) {}
+  return entry;
+}
+
